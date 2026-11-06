@@ -34,6 +34,22 @@
 
 착수 전이다. 진행 상황은 슬라이스 이슈에서 관리한다.
 
+| 이슈 | 슬라이스 | 백엔드 담당 | 차단 |
+|---|---|---|---|
+| [#1](https://github.com/20thTeam/fitmate-be/issues/1) | S1 목표를 고르고 추천 루틴 확인하기 | A 공통 설정 · B 참가자·루틴·배포 | 없음 |
+| [#2](https://github.com/20thTeam/fitmate-be/issues/2) | S2 다른 PC의 친구와 같은 3D 운동방에 입장하기 | A 실시간 입퇴장 · B 운동방·팀 | #1 |
+| [#3](https://github.com/20thTeam/fitmate-be/issues/3) | S3 카메라 앞에서 유효 횟수와 자세 피드백 받기 | A 동작 정보 형식 합의 · B 수행 기록 형식 | #1 |
+| [#4](https://github.com/20thTeam/fitmate-be/issues/4) | S4 내 실제 움직임을 캐릭터와 친구 화면에서 보기 | A 동작 정보 중계 | #2, #3 |
+| [#5](https://github.com/20thTeam/fitmate-be/issues/5) | S5 AI 가이드 시범을 보며 따라 하기 | B 가이드 참조 조회 | #2 |
+| [#6](https://github.com/20thTeam/fitmate-be/issues/6) | S6 친구 캐릭터를 클릭해 응원 주고받기 | A 응원 전달 · B 응원 저장 | #2 |
+| [#7](https://github.com/20thTeam/fitmate-be/issues/7) | S7 친구와 관계없이 내 루틴을 끝까지 진행하기 | A 끊김·재접속 · B 운동 기록 저장 | #2, #3 |
+| [#8](https://github.com/20thTeam/fitmate-be/issues/8) | S8 내 결과와 팀 경험치 변화 확인하기 | B 결과·경험치 | #7 |
+| [#9](https://github.com/20thTeam/fitmate-be/issues/9) | S9 1회차 결과로 2회차 추천받고 다시 입장하기 | A 재입장 상태 · B 2회차 추천 | #8 |
+| [#10](https://github.com/20thTeam/fitmate-be/issues/10) | S10 내 성장 기록 다시 보기 | B 성장 기록 조회 | #8, #9 |
+| [#11](https://github.com/20thTeam/fitmate-be/issues/11) | S11 홈에서 공개 선셋 에어로빅에 참여하기 (P1) | A 공개 파티 실시간 · B 기록 저장 | #2, #7 |
+
+> S10·S11은 Manyfast 최신본(기능 8.3, 10.1)에서 추가된 기능이다. `docs/` 문서에는 아직 반영되지 않았다.
+
 ## 프로젝트 구조
 
 ```
@@ -151,7 +167,7 @@ com.team20.fitmate
 - [ ]
 ```
 
-> 슬라이스 이슈 9개는 [docs/슬라이스_역할분담.md](docs/슬라이스_역할분담.md)에 본문까지 작성되어 있다. 제목은 `[Feat] Slice 0N {할 수 있게 되는 일}`이다.
+> 슬라이스 이슈는 [#1](https://github.com/20thTeam/fitmate-be/issues/1)~[#11](https://github.com/20thTeam/fitmate-be/issues/11)로 발행되어 있다. S1~S9의 원안은 [docs/슬라이스_역할분담.md](docs/슬라이스_역할분담.md)에 있다. 제목은 `[Feat] Slice 0N {할 수 있게 되는 일}`이다.
 
 라벨은 GitHub 기본 라벨에 아래를 더한다.
 
@@ -267,8 +283,11 @@ Repository  DB 접근
 
 | 트랙 | 담당 | 맡는 일 |
 |---|---|---|
-| A. 실시간 | (미정) | 운동방 입퇴장, 참가자 상태, 동작 정보 전달, 응원 전달, 끊김과 재접속 — 슬라이스 2·4·6·7 |
-| B. 데이터 · 배포 | (미정) | 참가자 식별, 루틴 저장, 수행 기록, 결과 조회, 팀 경험치, 2회차 저장, 배포 — 슬라이스 1·2·6·7·8·9 |
+| A. 실시간 | 김동환 ([@Donghwan814](https://github.com/Donghwan814)) | 공통 설정(`global`), 운동방 입퇴장, 참가자 상태, 동작 정보 전달, 응원 전달, 끊김과 재접속, 공개 선셋 파티 — 슬라이스 1·2·3·4·6·7·9·11 |
+| B. 데이터 · 배포 | 심아현 ([@ahyeon24](https://github.com/ahyeon24)) | 참가자 식별, 루틴 저장, 가이드 참조, 수행 기록, 결과 조회, 팀 경험치, 2회차 추천, 성장 기록, 배포 — 슬라이스 1·2·3·5·6·7·8·9·10·11 |
+
+- 슬라이스별로 각자 할 일은 이슈의 `백엔드(실시간)` / `백엔드(데이터·배포)` 체크리스트에 있다. 해당 없는 쪽은 "해당 없음"으로 적어 두었다.
+- A는 실시간 작업이 S2 이후에 몰려 있어 S1에서 공통 응답·예외·Swagger·CORS 설정을 먼저 맡는다.
 
 - A/B가 마주치는 접점은 **실시간 메시지 형식**과 **운동 기록 확정 시점**뿐이다. 슬라이스 2와 7에서 확정한 뒤 바꾸지 않는다.
 - AI, 3D, 프론트, 디자인 분담은 [docs/슬라이스_역할분담.md](docs/슬라이스_역할분담.md)를 따른다.
