@@ -9,9 +9,9 @@
 |---|---|
 | [CONTEXT.md](CONTEXT.md) | 용어집. 코드와 문서의 이름은 여기를 따른다 |
 | [docs/PRD.md](docs/PRD.md) | 제품 요구사항, 사용자 스토리, 범위 밖, PM 확인 필요 항목 |
-| [docs/기능명세서.md](docs/기능명세서.md) | 요구사항 9개, 기능 22개의 슬롯별 명세 |
-| [docs/ERD.md](docs/ERD.md) | 테이블 10개와 각 테이블의 근거 기능 |
-| [docs/슬라이스_역할분담.md](docs/슬라이스_역할분담.md) | 슬라이스 9개, 의존 순서, 직군별 역할 |
+| [docs/기능명세서.md](docs/기능명세서.md) | 요구사항 10개, 기능 22개의 슬롯별 명세 |
+| [docs/ERD.md](docs/ERD.md) | 테이블 11개와 각 테이블의 근거 기능 |
+| [docs/슬라이스_역할분담.md](docs/슬라이스_역할분담.md) | 슬라이스 11개, 의존 순서, 직군별 역할 |
 
 원본 기획은 PM이 매니패스트에 작성했다. 문서끼리 어긋나면 PM 확인 후 원본과 이 문서를 함께 고친다.
 
@@ -48,7 +48,7 @@
 | [#10](https://github.com/20thTeam/fitmate-be/issues/10) | S10 내 성장 기록 다시 보기 | B 성장 기록 조회 | #8, #9 |
 | [#11](https://github.com/20thTeam/fitmate-be/issues/11) | S11 홈에서 공개 선셋 에어로빅에 참여하기 (P1) | A 공개 파티 실시간 · B 기록 저장 | #2, #7 |
 
-> S10·S11은 Manyfast 최신본(기능 8.3, 10.1)에서 추가된 기능이다. `docs/` 문서에는 아직 반영되지 않았다.
+> S10·S11은 Manyfast 최신본(2026-11-06, 기능 8.3·10.1)에서 추가된 기능이다. `docs/` 문서도 같은 기준으로 갱신했다.
 
 ## 프로젝트 구조
 
@@ -167,7 +167,7 @@ com.team20.fitmate
 - [ ]
 ```
 
-> 슬라이스 이슈는 [#1](https://github.com/20thTeam/fitmate-be/issues/1)~[#11](https://github.com/20thTeam/fitmate-be/issues/11)로 발행되어 있다. S1~S9의 원안은 [docs/슬라이스_역할분담.md](docs/슬라이스_역할분담.md)에 있다. 제목은 `[Feat] Slice 0N {할 수 있게 되는 일}`이다.
+> 슬라이스 이슈는 [#1](https://github.com/20thTeam/fitmate-be/issues/1)~[#11](https://github.com/20thTeam/fitmate-be/issues/11)로 발행되어 있다. S1~S11의 원안은 [docs/슬라이스_역할분담.md](docs/슬라이스_역할분담.md)에 있다. 제목은 `[Feat] Slice 0N {할 수 있게 되는 일}`이다.
 
 라벨은 GitHub 기본 라벨에 아래를 더한다.
 

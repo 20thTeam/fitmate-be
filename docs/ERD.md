@@ -12,6 +12,7 @@ erDiagram
     ROUTINE ||--o| WORKOUT : "수행"
     PARTICIPANT ||--o{ WORKOUT : "기록"
     ROOM ||--o{ WORKOUT : "진행"
+    PUBLIC_PARTY ||--o{ WORKOUT : "공개 파티 진행, 제안"
     WORKOUT ||--o{ EXERCISE_RECORD : "운동별 기록"
     ROUTINE_EXERCISE ||--o| EXERCISE_RECORD : "목표 대비"
     WORKOUT |o--o{ ROUTINE : "다음 회차 근거"
@@ -69,11 +70,18 @@ erDiagram
         int target_seconds "시간형만"
         int target_sets "세트"
     }
+    PUBLIC_PARTY {
+        id id PK "공개 파티 식별값"
+        string name "파티 이름"
+        datetime open_at "오픈 시각, 설정값"
+        datetime close_at "종료 시각, 설정값"
+    }
     WORKOUT {
         id id PK "운동 기록 식별값"
-        id routine_id FK
+        id routine_id FK "공개 파티는 NULL 가능, 제안"
         id participant_id FK
-        id room_id FK
+        id room_id FK "친구 파티, 공개 파티면 NULL"
+        id public_party_id FK "공개 파티, 친구 파티면 NULL, 제안"
         string status "IN_PROGRESS, FINISHED, 제안"
         string analysis_status "ANALYZED, INSUFFICIENT, FAILED, 제안"
         datetime started_at
@@ -116,10 +124,11 @@ erDiagram
 | `EXERCISE` | 1.2, 3.2, 5.1 | 운동 목록이 미정이라 행은 나중에 넣는다 |
 | `ROUTINE` | 1.2, 8.2 | 첫 회차와 2회차를 같은 구조로 저장한다 |
 | `ROUTINE_EXERCISE` | 1.2, 1.3 | 횟수형과 시간형 중 하나만 채운다 |
-| `WORKOUT` | 7.1, 8.1, 9.1 | 한 회차 수행 단위. 이 ID로 경험치 중복을 막는다 |
+| `WORKOUT` | 7.1, 8.1, 8.3, 9.1, 10.1 | 한 회차 수행 단위. 이 ID로 경험치 중복을 막는다. 성장 기록(8.3)은 별도 테이블 없이 이 테이블과 `EXERCISE_RECORD`, `ROUTINE`을 참가자 기준으로 모아 조회한다 |
 | `EXERCISE_RECORD` | 3.2, 8.1 | 운동별 수행 기록. 플랭크는 `actual_seconds`로 기록한다 |
 | `TEAM_XP_LOG` | 9.1 | `workout_id` 유니크로 중복 적립을 DB에서 막는다 |
 | `CHEER` | 6.1 | 응원 이벤트 기록 |
+| `PUBLIC_PARTY` | 2.4, 10.1 | **제안.** 공개 선셋 파티(P1). 오픈·종료 시각은 설정값이며 정원이 없다. 친구 파티 `ROOM`과 섞지 않는다 |
 
 ## DB에 저장하지 않는 값 (제안)
 
@@ -145,3 +154,6 @@ erDiagram
 | 난이도, 주요 부위, 예상 시간 표시 여부 | PM | `EXERCISE`, `ROUTINE`에 컬럼 추가 |
 | 수행 부족 시 유지 또는 하향 | PM, AI | `ROUTINE.adjustment_type` |
 | 응원 기록의 저장 기간 | PM | `CHEER` 유지 여부 |
+| 공개 파티 운영 시각·요일, 팀 경험치 적립 여부 | PM | `PUBLIC_PARTY`, `TEAM_XP_LOG` 적용 범위 |
+| 공개 파티 에어로빅의 판정 방식(횟수형·시간형) | PM, AI | `EXERCISE.measure_type`, `EXERCISE_RECORD` |
+| 회차마다 목표를 다시 고를 수 있는지 | PM | `ROUTINE.goal` |
