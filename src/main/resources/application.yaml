@@ -1,3 +1,7 @@
 spring:
   application:
     name: fitmate
+
+# CORS 허용 프론트 주소 (쉼표로 구분). 배포 주소가 정해지면 여기에 추가한다.
+cors:
+  allowed-origins: http://localhost:5173,http://localhost:3000
