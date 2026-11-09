@@ -27,7 +27,8 @@
 | 데이터 | Spring Data JPA, Validation |
 | 운영 | Spring Boot Actuator |
 | 로컬 DB | H2 |
-| 운영 DB | 미정 (MySQL 또는 PostgreSQL) |
+| 운영 DB | PostgreSQL (AWS RDS) |
+| 배포 | AWS EC2 + Docker Compose, Caddy(HTTPS·wss) |
 | API 문서 | springdoc-openapi (추가 예정) |
 
 ## 구현 현황
@@ -87,7 +88,13 @@ com.team20.fitmate
 
 ### 1. 환경 변수
 
-아직 없다. 운영 DB가 정해지면 `.env.example`을 추가하고 여기에 적는다.
+로컬은 환경 변수 없이 실행된다. 운영 값은 [.env.example](.env.example)을 서버의 `~/fitmate/.env`로 복사해 채운다. `.env`는 깃에 올리지 않는다.
+
+| 변수 | 설명 |
+|---|---|
+| `DOMAIN` | HTTPS 주소. 도메인이 없으면 `{고정 IP를 -로 이은 값}.sslip.io` |
+| `DB_URL` / `DB_USERNAME` / `DB_PASSWORD` | RDS PostgreSQL 접속 정보 |
+| `CORS_ALLOWED_ORIGINS` | 요청을 허용할 프론트 주소 (쉼표 구분) |
 
 ### 2. 로컬 실행
 
@@ -100,7 +107,15 @@ com.team20.fitmate
 
 ### 3. 배포
 
-미정이다.
+AWS EC2 한 대에서 앱과 Caddy를 Docker Compose로 띄운다. Caddy가 HTTPS 인증서를 자동 발급하고 WebSocket(wss)도 그대로 전달한다. 서버는 메모리가 작아 빌드하지 않고, 로컬에서 만든 `app.jar`를 올려 실행만 한다.
+
+```bash
+EC2_HOST=<고정 IP> EC2_KEY=<pem 경로> ./deploy/deploy.sh
+```
+
+- 스크립트는 테스트·빌드 → 서버로 복사 → 컨테이너 재시작 순서로 진행한다. 서버의 `~/fitmate/.env`는 처음 한 번 직접 만든다.
+- 운영 프로필(`prod`)은 서버 시간대를 `Asia/Seoul`로 고정하고, Actuator는 `health`만 노출한다.
+- **재배포하면 실시간 접속이 잠깐 끊긴다.** 자체 테스트 기간에는 배포 시간을 미리 공지한다.
 
 ---
 

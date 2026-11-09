@@ -9,7 +9,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * 웹 MVC 공통 설정. 현재는 CORS만 다룬다.
  * <p>
  * 허용할 프론트 주소는 {@code application.yaml}의 {@code cors.allowed-origins}에 둔다.
- * 배포 주소가 정해지면 코드가 아니라 설정값에 추가한다.
+ * 운영에서는 환경 변수 {@code CORS_ALLOWED_ORIGINS}로 덮어쓴다. 주소가 바뀌면 코드가 아니라 설정값을 고친다.
  */
 @Configuration
 public class WebConfig implements WebMvcConfigurer {

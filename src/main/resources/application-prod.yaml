@@ -1,0 +1,20 @@
+# 운영(prod) 프로필 설정. SPRING_PROFILES_ACTIVE=prod 일 때 application.yaml 위에 덮어쓴다.
+# DB 접속 정보는 코드에 두지 않고 환경 변수로만 받는다. 값 목록은 .env.example을 본다.
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      # 해커톤 기간에는 엔티티 변경을 테이블에 자동 반영한다(컬럼 추가만, 삭제는 하지 않음).
+      # 실서비스 전환 시 마이그레이션 도구(Flyway 등)와 validate로 바꾼다.
+      ddl-auto: update
+    open-in-view: false
+
+# 운영에서는 헬스 체크만 외부에 노출한다
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health

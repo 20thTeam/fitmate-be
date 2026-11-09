@@ -1,0 +1,5 @@
+# DOMAIN(.env)으로 들어온 요청을 앱(8080)으로 넘긴다.
+# Caddy가 HTTPS 인증서를 자동 발급·갱신하고, WebSocket(wss) 업그레이드도 그대로 전달한다.
+{$DOMAIN} {
+	reverse_proxy app:8080
+}

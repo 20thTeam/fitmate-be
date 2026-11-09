@@ -1,0 +1,33 @@
+# EC2에서 앱과 Caddy(HTTPS·wss 프록시)를 함께 띄운다.
+# 사용: 이 폴더에 app.jar와 .env를 둔 뒤 `docker compose up -d --build`
+services:
+  app:
+    build: .
+    env_file: .env
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    expose:
+      - "8080"
+    # 프리 티어 서버(메모리 1GB)에서 Caddy·OS 몫을 남긴다
+    mem_limit: 700m
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+
+volumes:
+  # 발급받은 HTTPS 인증서를 재시작 후에도 유지한다
+  caddy_data:
+  caddy_config:

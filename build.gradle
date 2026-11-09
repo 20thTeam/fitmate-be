@@ -27,6 +27,7 @@ dependencies {
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.2.0'
 	compileOnly 'org.projectlombok:lombok'
 	runtimeOnly 'com.h2database:h2'
+	runtimeOnly 'org.postgresql:postgresql'
 	annotationProcessor 'org.projectlombok:lombok'
 	testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
 	testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
@@ -36,6 +37,16 @@ dependencies {
 	testCompileOnly 'org.projectlombok:lombok'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 	testAnnotationProcessor 'org.projectlombok:lombok'
+}
+
+// 배포용 실행 파일 이름을 app.jar로 고정한다 (deploy/Dockerfile이 이 이름을 쓴다)
+tasks.named('bootJar') {
+	archiveFileName = 'app.jar'
+}
+
+// 실행할 수 없는 plain jar는 만들지 않는다
+tasks.named('jar') {
+	enabled = false
 }
 
 tasks.named('test') {
