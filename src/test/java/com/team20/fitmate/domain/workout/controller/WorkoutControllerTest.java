@@ -12,6 +12,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -64,7 +65,7 @@ class WorkoutControllerTest {
     }
 
     @Test
-    @DisplayName("시작 후 종료하면 200-1과 확정된 수행 기록을 응답하고, 자세 결과는 보낸 JSON 그대로 돌려준다")
+    @DisplayName("시작 후 종료하면 200-1과 확정된 수행 기록을 응답하고, 결과 조회에서 같은 값과 자세 결과 JSON을 돌려준다")
     void startAndFinish() throws Exception {
         Integer workoutId = startWorkout();
         String finishBody = """
@@ -92,6 +93,25 @@ class WorkoutControllerTest {
                         .content(finishBody))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.resultCode").value("409-1"));
+
+        mockMvc.perform(get("/api/workouts/{workoutId}/result", workoutId)
+                        .header(ParticipantController.TOKEN_HEADER, clientToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resultCode").value("200-1"))
+                .andExpect(jsonPath("$.data.workout.status").value("FINISHED"))
+                .andExpect(jsonPath("$.data.workout.records[0].validCount").value(10))
+                .andExpect(jsonPath("$.data.workout.records[0].postureResult.feedback[0]").value("무릎이 발끝을 넘어요"))
+                .andExpect(jsonPath("$.data.teamXp.status").value("NO_TEAM"))
+                .andExpect(jsonPath("$.data.teamXp.earnedXp").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("없는 운동 기록의 결과를 조회하면 404-5로 응답한다")
+    void resultOfUnknownWorkout() throws Exception {
+        mockMvc.perform(get("/api/workouts/{workoutId}/result", 999999)
+                        .header(ParticipantController.TOKEN_HEADER, clientToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.resultCode").value("404-5"));
     }
 
     @Test
