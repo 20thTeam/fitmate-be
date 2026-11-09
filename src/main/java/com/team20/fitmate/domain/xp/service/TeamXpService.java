@@ -16,6 +16,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,6 +29,12 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class TeamXpService {
 
+    /** 참가자 1명이 하루에 적립할 수 있는 최대 경험치 (PM 확정) */
+    static final int DAILY_XP_LIMIT_PER_PARTICIPANT = 100;
+
+    /** 하루를 나누는 기준 시간대 */
+    private static final ZoneId SERVICE_ZONE = ZoneId.of("Asia/Seoul");
+
     private final XpCalculator xpCalculator;
     private final TeamXpLogRepository teamXpLogRepository;
     private final TeamRepository teamRepository;
@@ -35,6 +44,7 @@ public class TeamXpService {
      * <p>
      * 운동방(팀) 없이 운동했거나, 산식이 정해지지 않았거나, 이미 적립한 운동 기록이면 적립하지 않는다.
      * 중복은 이 검사와 {@code workout_id} 유니크 제약으로 두 번 막는다.
+     * 참가자의 오늘(한국 시간) 적립 합계가 하루 최대치를 넘지 않도록 잘라서 적립한다.
      */
     @Transactional
     public void accrue(Workout workout, List<ExerciseRecord> records) {
@@ -43,9 +53,18 @@ public class TeamXpService {
             return;
         }
 
-        int earnedXp = xpCalculator.calculate(records);
-        teamXpLogRepository.save(TeamXpLog.of(team, workout, earnedXp));
+        int earnedXp = Math.min(xpCalculator.calculate(records), remainingDailyXp(workout.getParticipant().getId()));
+        TeamXpLog log = teamXpLogRepository.save(TeamXpLog.of(team, workout, earnedXp));
         teamRepository.addXp(team.getId(), earnedXp);
+        log.recordTeamTotal(teamRepository.findTotalXp(team.getId()));
+    }
+
+    /** 참가자가 오늘 더 적립할 수 있는 경험치 */
+    private int remainingDailyXp(Long participantId) {
+        LocalDateTime todayStart = LocalDate.now(SERVICE_ZONE).atStartOfDay();
+        int earnedToday = teamXpLogRepository.sumEarnedXpByParticipantBetween(
+                participantId, todayStart, todayStart.plusDays(1));
+        return Math.max(0, DAILY_XP_LIMIT_PER_PARTICIPANT - earnedToday);
     }
 
     /**
@@ -65,7 +84,8 @@ public class TeamXpService {
         if (log.isEmpty()) {
             return TeamXpChangeResponse.notAccrued(XpStatus.FORMULA_UNDECIDED, team);
         }
-        return TeamXpChangeResponse.accrued(team, log.get().getEarnedXp(), teamRepository.findTotalXp(team.getId()));
+        return TeamXpChangeResponse.accrued(team, log.get().getEarnedXp(), teamRepository.findTotalXp(team.getId()),
+                log.get().getTeamTotalXpAfter());
     }
 
     /**

@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 팀 경험치 조회 API.
  */
-@Tag(name = "팀 경험치", description = "팀 누적 경험치 조회")
+@Tag(name = "팀 경험치", description = "팀 누적 경험치와 레벨 조회")
 @RestController
 @RequestMapping("/api/teams")
 @RequiredArgsConstructor
@@ -29,8 +29,8 @@ public class TeamXpController {
      * 팀 누적 경험치를 조회한다.
      */
     @Operation(summary = "팀 누적 경험치 조회",
-            description = "팀 누적 경험치와 레벨을 조회한다. 경험치 산식이 정해지지 않았으면 formulaDecided가 false이고 "
-                    + "totalXp는 null이다. 레벨은 기준 합의 전이라 null이다.")
+            description = "팀 누적 경험치와 레벨(Lv.1~5), 다음 레벨까지의 진행도 계산용 값을 조회한다. "
+                    + "운동방의 팀 레벨 표시와 성장 기록에 쓴다. Lv.5는 최고 레벨이라 nextLevelXp가 null이다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "200-1 조회 성공"),
             @ApiResponse(responseCode = "400", description = "400-3 teamId 형식 오류"),

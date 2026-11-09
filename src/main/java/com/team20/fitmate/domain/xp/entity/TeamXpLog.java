@@ -47,9 +47,13 @@ public class TeamXpLog extends BaseTimeEntity {
     @JoinColumn(name = "workout_id", nullable = false, unique = true)
     private Workout workout;
 
-    /** 적립 경험치 */
+    /** 적립 경험치. 하루 최대치를 넘으면 0일 수 있다 */
     @Column(name = "earned_xp", nullable = false)
     private int earnedXp;
+
+    /** 적립 직후 팀 누적 경험치. 이번 운동으로 레벨이 올랐는지 보여줄 때 쓴다 */
+    @Column(name = "team_total_xp_after")
+    private Integer teamTotalXpAfter;
 
     private TeamXpLog(Team team, Participant participant, Workout workout, int earnedXp) {
         this.team = team;
@@ -63,5 +67,12 @@ public class TeamXpLog extends BaseTimeEntity {
      */
     public static TeamXpLog of(Team team, Workout workout, int earnedXp) {
         return new TeamXpLog(team, workout.getParticipant(), workout, earnedXp);
+    }
+
+    /**
+     * 적립 직후 팀 누적 경험치를 남긴다.
+     */
+    public void recordTeamTotal(int teamTotalXpAfter) {
+        this.teamTotalXpAfter = teamTotalXpAfter;
     }
 }

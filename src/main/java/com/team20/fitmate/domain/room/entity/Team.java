@@ -36,10 +36,6 @@ public class Team extends BaseTimeEntity {
     @Column(name = "total_xp", nullable = false)
     private int totalXp;
 
-    /** 팀 레벨. 레벨 기준이 정해지기 전까지 비워 둔다 */
-    @Column(name = "level")
-    private Integer level;
-
     private Team(String name) {
         this.name = name;
         this.totalXp = 0;
