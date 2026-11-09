@@ -12,7 +12,7 @@ REMOTE_DIR="fitmate"
 cd "$(dirname "$0")/.."
 
 echo "1/3 테스트·빌드"
-./gradlew clean bootJar
+./gradlew clean test bootJar
 
 echo "2/3 서버로 파일 복사"
 ssh -i "$EC2_KEY" "$EC2_USER@$EC2_HOST" "mkdir -p ~/$REMOTE_DIR"
