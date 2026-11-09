@@ -32,7 +32,17 @@ public enum ErrorCode {
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "405-1", "지원하지 않는 요청 방식입니다."),
 
     /** 처리하지 못한 서버 내부 오류. 내부 메시지는 응답에 노출하지 않는다 */
-    INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "500-1", "서버 오류가 발생했습니다.");
+    INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "500-1", "서버 오류가 발생했습니다."),
+
+    // ===== 참가자 =====
+
+    /** 재방문 토큰에 해당하는 참가자가 없음 */
+    PARTICIPANT_NOT_FOUND(HttpStatus.NOT_FOUND, "404-2", "참가자를 찾을 수 없습니다."),
+
+    // ===== 루틴 =====
+
+    /** 루틴이 없거나 본인 루틴이 아님 */
+    ROUTINE_NOT_FOUND(HttpStatus.NOT_FOUND, "404-3", "루틴을 찾을 수 없습니다.");
 
     /** 응답 HTTP 상태 */
     private final HttpStatus status;
