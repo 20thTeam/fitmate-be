@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 /**
  * 루틴을 이루는 운동 하나의 응답.
  *
+ * @param routineExerciseId 루틴 구성 운동 식별값 (운동 종료 때 보낸다)
  * @param exerciseId    운동 ID
  * @param name          운동 이름
  * @param measureType   측정 방식
@@ -16,6 +17,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * @param targetSets    세트 수
  */
 public record RoutineExerciseResponse(
+
+        @Schema(description = "루틴 구성 운동 식별값. 운동 종료 때 수행 기록의 routineExerciseId로 보낸다", example = "1")
+        Long routineExerciseId,
 
         @Schema(description = "운동 ID", example = "1")
         Long exerciseId,
@@ -44,6 +48,7 @@ public record RoutineExerciseResponse(
      */
     public static RoutineExerciseResponse from(RoutineExercise routineExercise) {
         return new RoutineExerciseResponse(
+                routineExercise.getId(),
                 routineExercise.getExercise().getId(),
                 routineExercise.getExercise().getName(),
                 routineExercise.getExercise().getMeasureType(),

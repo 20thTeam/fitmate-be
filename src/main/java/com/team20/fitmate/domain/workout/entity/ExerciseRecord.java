@@ -170,5 +170,12 @@ public class ExerciseRecord extends BaseTimeEntity {
     public record Values(MeasurementStatus measurementStatus, Integer validCount, Integer belowStandardCount,
                          Integer undeterminedCount, Integer actualSeconds, Integer performedSets,
                          String postureResult) {
+
+        /**
+         * 제출되지 않은 운동에 쓰는 "측정 못 함" 값. 근거가 없으므로 모든 값을 null로 둔다.
+         */
+        public static Values notMeasured() {
+            return new Values(MeasurementStatus.NOT_MEASURED, null, null, null, null, null, null);
+        }
     }
 }

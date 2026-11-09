@@ -50,7 +50,18 @@ public enum ErrorCode {
     // ===== 운동방 =====
 
     /** 운동방이 없음 */
-    ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, "404-4", "운동방을 찾을 수 없습니다.");
+    ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, "404-4", "운동방을 찾을 수 없습니다."),
+
+    // ===== 운동 기록 =====
+
+    /** 운동 기록이 없거나 본인 기록이 아님 */
+    WORKOUT_NOT_FOUND(HttpStatus.NOT_FOUND, "404-5", "운동 기록을 찾을 수 없습니다."),
+
+    /** 이미 종료된 운동 기록에 다시 제출함 */
+    WORKOUT_ALREADY_FINISHED(HttpStatus.CONFLICT, "409-1", "이미 종료된 운동 기록입니다."),
+
+    /** 추천 불가 등 운동을 시작할 수 없는 루틴 */
+    ROUTINE_NOT_STARTABLE(HttpStatus.CONFLICT, "409-2", "운동을 시작할 수 없는 루틴입니다.");
 
     /** 응답 HTTP 상태 */
     private final HttpStatus status;
