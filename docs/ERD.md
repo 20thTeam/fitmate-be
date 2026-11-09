@@ -9,6 +9,7 @@ erDiagram
     PARTICIPANT ||--o{ ROUTINE : "추천받음"
     ROUTINE ||--|{ ROUTINE_EXERCISE : "구성"
     EXERCISE ||--o{ ROUTINE_EXERCISE : "포함"
+    EXERCISE ||--o{ EXERCISE_RECORD : "수행됨"
     ROUTINE ||--o| WORKOUT : "수행"
     PARTICIPANT ||--o{ WORKOUT : "기록"
     ROOM ||--o{ WORKOUT : "진행"
@@ -90,11 +91,15 @@ erDiagram
     EXERCISE_RECORD {
         id id PK
         id workout_id FK
-        id routine_exercise_id FK
-        int valid_count "인정 횟수, 미측정은 NULL"
+        id routine_exercise_id FK "공개 파티는 NULL"
+        id exercise_id FK "수행한 운동"
+        string measurement_status "MEASURED, NOT_MEASURED"
+        int valid_count "인정 횟수, 미측정·시간형은 NULL"
+        int below_standard_count "기준 미달 횟수, 미측정은 NULL"
+        int undetermined_count "판정 불가 횟수, 미측정은 NULL"
         int actual_seconds "실제 소요 시간"
         int performed_sets "수행 세트, 제안"
-        string posture_result "자세 판정 결과, 형식 확인 필요"
+        string posture_result "자세 판정 결과 JSON, 형식 확인 필요"
     }
     TEAM_XP_LOG {
         id id PK
@@ -125,7 +130,7 @@ erDiagram
 | `ROUTINE` | 1.2, 8.2 | 첫 회차와 2회차를 같은 구조로 저장한다 |
 | `ROUTINE_EXERCISE` | 1.2, 1.3 | 횟수형과 시간형 중 하나만 채운다 |
 | `WORKOUT` | 7.1, 8.1, 8.3, 9.1, 10.1 | 한 회차 수행 단위. 이 ID로 경험치 중복을 막는다. 성장 기록(8.3)은 별도 테이블 없이 이 테이블과 `EXERCISE_RECORD`, `ROUTINE`을 참가자 기준으로 모아 조회한다 |
-| `EXERCISE_RECORD` | 3.2, 8.1 | 운동별 수행 기록. 플랭크는 `actual_seconds`로 기록한다 |
+| `EXERCISE_RECORD` | 3.2, 8.1 | 운동별 수행 기록. 플랭크는 `actual_seconds`로 기록한다. 제출 형식은 [수행기록_형식.md](수행기록_형식.md). `(workout_id, routine_exercise_id)` 유니크 |
 | `TEAM_XP_LOG` | 9.1 | `workout_id` 유니크로 중복 적립을 DB에서 막는다 |
 | `CHEER` | 6.1 | 응원 이벤트 기록 |
 | `PUBLIC_PARTY` | 2.4, 10.1 | **제안.** 공개 선셋 파티(P1). 오픈·종료 시각은 설정값이며 정원이 없다. 친구 파티 `ROOM`과 섞지 않는다 |
