@@ -19,8 +19,11 @@ public record StatusPayload(Long exerciseId, String exerciseName, ProgressStatus
 
     /**
      * 진행 상태가 있고, 운동 식별값·이름이 형식에 맞는지 확인한다.
+     * <p>
+     * 이름을 {@code isValid()}로 하면 Jackson이 getter로 읽어 응답에 {@code "valid"} 필드가 섞여 나간다.
+     * 그래서 getter 규칙(is·get)에 걸리지 않는 이름을 쓴다.
      */
-    public boolean isValid() {
+    public boolean hasValidFormat() {
         if (progressStatus == null) {
             return false;
         }

@@ -9,9 +9,9 @@ package com.team20.fitmate.realtime.message;
 public record JoinPayload(String token, Long roomId) {
 
     /**
-     * 필수 값이 모두 있는지 확인한다.
+     * 필수 값이 모두 있는지 확인한다. getter로 직렬화되지 않도록 is·get으로 시작하지 않는 이름을 쓴다.
      */
-    public boolean isValid() {
+    public boolean hasValidFormat() {
         return token != null && !token.isBlank() && roomId != null;
     }
 }

@@ -83,7 +83,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             throw new RealtimeException(RealtimeErrorCode.ALREADY_JOINED);
         }
         JoinPayload join = jsonMapper.treeToValue(payload, JoinPayload.class);
-        if (join == null || !join.isValid()) {
+        if (join == null || !join.hasValidFormat()) {
             throw new RealtimeException(RealtimeErrorCode.INVALID_MESSAGE);
         }
         JoinTicket ticket = joinValidator.validate(join.token(), join.roomId());
@@ -95,7 +95,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
      */
     private void handleStatus(String sessionId, JsonNode payload) {
         StatusPayload status = jsonMapper.treeToValue(payload, StatusPayload.class);
-        if (status == null || !status.isValid()) {
+        if (status == null || !status.hasValidFormat()) {
             throw new RealtimeException(RealtimeErrorCode.INVALID_MESSAGE);
         }
         registry.updateStatus(sessionId, status);

@@ -156,6 +156,9 @@ class RoomWebSocketHandlerIntegrationTest {
         assertThat(status.path("payload").path("exerciseId").asLong()).isEqualTo(3);
         assertThat(status.path("payload").path("exerciseName").asString()).isEqualTo("스쿼트");
         assertThat(status.path("payload").path("progressStatus").asString()).isEqualTo("EXERCISING");
+        assertThat(status.path("payload").propertyNames())
+                .as("문서에 정한 세 필드만 나가야 한다")
+                .containsExactlyInAnyOrder("exerciseId", "exerciseName", "progressStatus");
     }
 
     @Test
