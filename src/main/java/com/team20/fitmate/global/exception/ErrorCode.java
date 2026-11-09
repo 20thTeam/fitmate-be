@@ -25,6 +25,9 @@ public enum ErrorCode {
     /** 필수 요청 파라미터 누락 또는 파라미터 타입 불일치 */
     INVALID_PARAMETER(HttpStatus.BAD_REQUEST, "400-3", "요청 파라미터가 올바르지 않습니다."),
 
+    /** 수행 기록 값이 측정 상태·측정 방식 규칙에 맞지 않음 (예: 미측정인데 유효 횟수가 있음) */
+    INVALID_EXERCISE_RECORD(HttpStatus.BAD_REQUEST, "400-4", "수행 기록 값이 올바르지 않습니다."),
+
     /** 존재하지 않는 주소로 요청 */
     NOT_FOUND(HttpStatus.NOT_FOUND, "404-1", "요청한 경로를 찾을 수 없습니다."),
 
