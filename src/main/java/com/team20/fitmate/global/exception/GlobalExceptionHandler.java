@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -59,9 +60,10 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 필수 요청 파라미터 누락, 파라미터 타입 불일치(예: 숫자 자리에 문자) 처리.
+     * 필수 요청 파라미터·헤더 누락, 파라미터 타입 불일치(예: 숫자 자리에 문자) 처리.
      */
-    @ExceptionHandler({MissingServletRequestParameterException.class, MethodArgumentTypeMismatchException.class})
+    @ExceptionHandler({MissingServletRequestParameterException.class, MissingRequestHeaderException.class,
+            MethodArgumentTypeMismatchException.class})
     public ResponseEntity<RsData<Void>> handleInvalidParameter(Exception e) {
         log.warn("{}: {}", e.getClass().getSimpleName(), e.getMessage());
         return toResponse(ErrorCode.INVALID_PARAMETER);
