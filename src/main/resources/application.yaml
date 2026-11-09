@@ -6,3 +6,10 @@ spring:
 # 운영에서는 환경 변수 CORS_ALLOWED_ORIGINS로 덮어쓴다. 없으면 로컬 주소만 허용한다.
 cors:
   allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
+
+# 운동방 실시간 연결(/ws) 시간 설정. 모두 임시값이며 다중 PC 테스트 후 PM 승인을 받아 바꾼다.
+realtime:
+  join-timeout: 10s        # 연결 후 JOIN을 기다리는 시간
+  heartbeat-timeout: 30s   # 아무 메시지가 없으면 연결 불안정으로 보는 시간 (클라이언트는 10초마다 PING 권장)
+  reconnect-grace: 30s     # 연결 불안정 후 재접속을 기다리는 시간. 넘으면 퇴장 처리
+  sweep-interval-ms: 1000  # 위 시간들을 확인하는 주기
