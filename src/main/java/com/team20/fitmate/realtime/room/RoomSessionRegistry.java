@@ -43,6 +43,14 @@ import java.util.Map;
 @Component
 public class RoomSessionRegistry {
 
+    /**
+     * 응답 대기 시간 동안 메시지가 없어 닫을 때 쓰는 닫힘 상태(코드 4500).
+     * <p>
+     * Spring의 {@code SESSION_NOT_RELIABLE}은 기본 사유가 "전송 시간 초과" 문구라서 원인을 헷갈리게 한다.
+     * 코드는 그대로 두고 사유만 바꿔, 프론트가 사유로 응답 없음 끊김을 구분할 수 있게 한다.
+     */
+    static final CloseStatus HEARTBEAT_TIMEOUT = CloseStatus.SESSION_NOT_RELIABLE.withReason("HEARTBEAT_TIMEOUT");
+
     private final RealtimeProperties properties;
     private final JsonMapper jsonMapper;
     private final Clock clock;
@@ -264,7 +272,7 @@ public class RoomSessionRegistry {
                 } else if (!now.isBefore(connection.lastSeenAt.plus(properties.heartbeatTimeout()))) {
                     connections.remove(connection.session.getId());
                     markUnstable(connection, now);
-                    close(connection, CloseStatus.SESSION_NOT_RELIABLE);
+                    close(connection, HEARTBEAT_TIMEOUT);
                 }
             }
             for (RoomState room : new ArrayList<>(rooms.values())) {

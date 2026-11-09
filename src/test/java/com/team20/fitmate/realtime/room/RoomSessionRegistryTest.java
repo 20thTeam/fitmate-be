@@ -202,7 +202,10 @@ class RoomSessionRegistryTest {
         registry.sweep();
 
         assertThat(viewOf(1).connectionStatus()).isEqualTo(ConnectionStatus.UNSTABLE);
-        assertThat(first.closeStatus()).isNotNull();
+        assertThat(first.closeStatus().getCode()).isEqualTo(4500);
+        assertThat(first.closeStatus().getReason())
+                .as("Spring 기본 사유(전송 시간 초과)가 아니라 응답 없음 사유로 닫아야 한다")
+                .isEqualTo("HEARTBEAT_TIMEOUT");
         assertThat(viewOf(2).connectionStatus()).isEqualTo(ConnectionStatus.CONNECTED);
         assertThat(second.last().path("payload").path("connectionStatus").asString()).isEqualTo("UNSTABLE");
     }
