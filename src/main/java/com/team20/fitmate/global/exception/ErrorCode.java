@@ -42,7 +42,12 @@ public enum ErrorCode {
     // ===== 루틴 =====
 
     /** 루틴이 없거나 본인 루틴이 아님 */
-    ROUTINE_NOT_FOUND(HttpStatus.NOT_FOUND, "404-3", "루틴을 찾을 수 없습니다.");
+    ROUTINE_NOT_FOUND(HttpStatus.NOT_FOUND, "404-3", "루틴을 찾을 수 없습니다."),
+
+    // ===== 운동방 =====
+
+    /** 운동방이 없음 */
+    ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, "404-4", "운동방을 찾을 수 없습니다.");
 
     /** 응답 HTTP 상태 */
     private final HttpStatus status;

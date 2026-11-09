@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * @param participantId 임시 식별값
  * @param nickname      닉네임
  * @param characterCode 캐릭터 코드
+ * @param roomId        입장한 운동방 식별값. 입장 전이면 null
  */
 public record ParticipantResponse(
 
@@ -19,7 +20,10 @@ public record ParticipantResponse(
         String nickname,
 
         @Schema(description = "캐릭터 코드", example = "CHARACTER_01")
-        String characterCode
+        String characterCode,
+
+        @Schema(description = "입장한 운동방 식별값. 입장 전이면 null", example = "1", nullable = true)
+        Long roomId
 ) {
 
     /**
@@ -29,7 +33,8 @@ public record ParticipantResponse(
         return new ParticipantResponse(
                 participant.getId(),
                 participant.getNickname(),
-                participant.getCharacterCode()
+                participant.getCharacterCode(),
+                participant.getRoom() == null ? null : participant.getRoom().getId()
         );
     }
 }
