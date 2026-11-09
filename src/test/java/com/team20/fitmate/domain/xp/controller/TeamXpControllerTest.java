@@ -28,7 +28,7 @@ class TeamXpControllerTest {
     private RoomService roomService;
 
     @Test
-    @DisplayName("팀 경험치를 조회하면 200-1과 팀 정보를 응답하고, 산식 미정이면 수치를 비운다")
+    @DisplayName("팀 경험치를 조회하면 200-1과 누적 경험치·레벨·다음 레벨 시작 경험치를 응답한다")
     void getTeamXp() throws Exception {
         Long teamId = roomService.getAll().getFirst().teamId();
 
@@ -36,8 +36,11 @@ class TeamXpControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.resultCode").value("200-1"))
                 .andExpect(jsonPath("$.data.teamId").value(teamId))
-                .andExpect(jsonPath("$.data.formulaDecided").value(false))
-                .andExpect(jsonPath("$.data.totalXp").doesNotExist());
+                .andExpect(jsonPath("$.data.formulaDecided").value(true))
+                .andExpect(jsonPath("$.data.totalXp").isNumber())
+                .andExpect(jsonPath("$.data.level").isNumber())
+                .andExpect(jsonPath("$.data.levelMinXp").isNumber())
+                .andExpect(jsonPath("$.data.maxLevel").isBoolean());
     }
 
     @Test

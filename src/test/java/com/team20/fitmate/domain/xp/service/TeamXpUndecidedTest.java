@@ -9,7 +9,9 @@ import com.team20.fitmate.domain.routine.entity.Goal;
 import com.team20.fitmate.domain.routine.service.RoutineService;
 import com.team20.fitmate.domain.workout.dto.WorkoutFinishRequest;
 import com.team20.fitmate.domain.workout.dto.WorkoutResultResponse;
+import com.team20.fitmate.domain.workout.entity.ExerciseRecord;
 import com.team20.fitmate.domain.workout.service.WorkoutService;
+import com.team20.fitmate.domain.xp.calculator.XpCalculator;
 import com.team20.fitmate.domain.xp.dto.TeamXpResponse;
 import com.team20.fitmate.domain.xp.entity.XpStatus;
 import com.team20.fitmate.domain.xp.repository.TeamXpLogRepository;
@@ -19,6 +21,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -27,11 +32,34 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 경험치 산식이 정해지지 않은 기본 상태에서 임의 수치를 만들지 않는지, 결과 조회가 본인 기록만 돌려주는지 확인하는 테스트.
+ * 경험치 산식이 정해지지 않은 상태에서 임의 수치를 만들지 않는지, 결과 조회가 본인 기록만 돌려주는지 확인하는 테스트.
+ * <p>
+ * 운영 산식은 정해졌으므로, 산식이 바뀌는 동안 등 "미정" 구현이 들어왔을 때의 동작을 테스트 전용 구현으로 고정한다.
  */
 @SpringBootTest
 @Transactional
 class TeamXpUndecidedTest {
+
+    /** 테스트 전용: 산식 미정 구현 */
+    @TestConfiguration
+    static class UndecidedXpCalculatorConfig {
+
+        @Bean
+        @Primary
+        XpCalculator undecidedXpCalculator() {
+            return new XpCalculator() {
+                @Override
+                public boolean isDecided() {
+                    return false;
+                }
+
+                @Override
+                public int calculate(List<ExerciseRecord> records) {
+                    throw new IllegalStateException("산식 미정");
+                }
+            };
+        }
+    }
 
     @Autowired
     private WorkoutService workoutService;
