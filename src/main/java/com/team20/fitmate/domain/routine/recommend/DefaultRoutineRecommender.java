@@ -17,23 +17,28 @@ import java.util.Map;
 @Component
 public class DefaultRoutineRecommender implements RoutineRecommender {
 
-    /** 목표별 기본 루틴 (임시) */
+    /**
+     * 목표별 기본 루틴 (임시). 프론트 임시 루틴(fitmate-fe {@code config/provisional.ts})과 같은 값이다.
+     * 운동 인식은 프론트(AI)가 하므로, 인식할 수 있는 운동과 수행량은 프론트 쪽 값을 따른다.
+     * PM·AI가 확정하면 이 값만 바꾼다.
+     */
     private static final Map<Goal, List<RecommendedExercise>> DEFAULT_ROUTINES = Map.of(
-            Goal.POSTURE, List.of(
-                    new RecommendedExercise("SQUAT", 10, 3),
-                    new RecommendedExercise("PLANK", 20, 3)),
             Goal.WEIGHT_LOSS, List.of(
-                    new RecommendedExercise("SQUAT", 12, 3),
-                    new RecommendedExercise("LUNGE", 10, 3),
-                    new RecommendedExercise("PLANK", 20, 3)),
+                    new RecommendedExercise("JUMPING_JACK", 20, 3, "체중 감량 · 전신 유산소"),
+                    new RecommendedExercise("SQUAT", 12, 3, "체중 감량 · 하체 근력"),
+                    new RecommendedExercise("LUNGE", 10, 2, "체중 감량 · 하체 균형")),
+            Goal.POSTURE, List.of(
+                    new RecommendedExercise("SQUAT", 12, 3, "자세 개선 · 하체 근력 강화"),
+                    new RecommendedExercise("HIP_HINGE_DEADLIFT", 10, 3, "자세 개선 · 후면 사슬 강화"),
+                    new RecommendedExercise("PLANK", 30, 3, "코어 안정화 · 자세 유지력")),
             Goal.STRENGTH, List.of(
-                    new RecommendedExercise("SQUAT", 12, 3),
-                    new RecommendedExercise("HIP_HINGE_DEADLIFT", 10, 3),
-                    new RecommendedExercise("LUNGE", 10, 3)),
+                    new RecommendedExercise("SQUAT", 15, 3, "근력 강화 · 하체"),
+                    new RecommendedExercise("LUNGE", 12, 3, "근력 강화 · 하체 균형"),
+                    new RecommendedExercise("PLANK", 30, 3, "근력 강화 · 코어")),
             Goal.STAMINA, List.of(
-                    new RecommendedExercise("LUNGE", 10, 3),
-                    new RecommendedExercise("SQUAT", 12, 3),
-                    new RecommendedExercise("PLANK", 30, 3))
+                    new RecommendedExercise("JUMPING_JACK", 25, 3, "체력 증진 · 유산소"),
+                    new RecommendedExercise("HIGH_KNEES", 20, 3, "체력 증진 · 인터벌"),
+                    new RecommendedExercise("SQUAT", 15, 2, "체력 증진 · 하체 지구력"))
     );
 
     /**

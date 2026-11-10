@@ -9,7 +9,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *
  * @param routineExerciseId 루틴 구성 운동 식별값 (운동 종료 때 보낸다)
  * @param exerciseId    운동 ID
+ * @param exerciseCode  운동 코드 (프론트 자세 인식·가이드 선택용)
  * @param name          운동 이름
+ * @param tag           운동 설명 태그. 없으면 null
  * @param measureType   측정 방식
  * @param sortOrder     순서 (1부터)
  * @param targetCount   목표 횟수. 시간형이면 null
@@ -24,8 +26,15 @@ public record RoutineExerciseResponse(
         @Schema(description = "운동 ID", example = "1")
         Long exerciseId,
 
+        @Schema(description = "운동 코드. 프론트 자세 인식·가이드 선택에 쓴다 "
+                + "(SQUAT, HIP_HINGE_DEADLIFT, LUNGE, PLANK, JUMPING_JACK, HIGH_KNEES)", example = "SQUAT")
+        String exerciseCode,
+
         @Schema(description = "운동 이름", example = "스쿼트")
         String name,
+
+        @Schema(description = "운동 설명 태그", example = "자세 개선 · 하체 근력 강화", nullable = true)
+        String tag,
 
         @Schema(description = "측정 방식 (COUNT 횟수형, TIME 시간형)", example = "COUNT")
         MeasureType measureType,
@@ -50,7 +59,9 @@ public record RoutineExerciseResponse(
         return new RoutineExerciseResponse(
                 routineExercise.getId(),
                 routineExercise.getExercise().getId(),
+                routineExercise.getExercise().getCode(),
                 routineExercise.getExercise().getName(),
+                routineExercise.getTag(),
                 routineExercise.getExercise().getMeasureType(),
                 routineExercise.getSortOrder(),
                 routineExercise.getTargetCount(),

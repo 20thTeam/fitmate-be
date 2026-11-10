@@ -101,7 +101,7 @@ public class RoutineService {
         for (int i = 0; i < recommended.size(); i++) {
             RecommendedExercise item = recommended.get(i);
             routine.addExercise(RoutineExercise.of(
-                    exercisesByCode.get(item.exerciseCode()), i + 1, item.amount(), item.sets()));
+                    exercisesByCode.get(item.exerciseCode()), i + 1, item.amount(), item.sets(), item.tag()));
         }
         return routine;
     }
