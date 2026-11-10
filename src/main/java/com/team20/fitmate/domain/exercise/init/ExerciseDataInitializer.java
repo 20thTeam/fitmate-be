@@ -24,12 +24,17 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ExerciseDataInitializer implements ApplicationRunner {
 
-    /** 초기 운동 목록 (임시) */
+    /**
+     * 초기 운동 목록 (임시). 프론트 자세 인식(fitmate-fe {@code lib/pose/repCounter.ts})이 셀 수 있는 운동이다.
+     * 서버가 이미 떠 있던 DB에도 없는 운동만 추가된다.
+     */
     private static final List<ExerciseSeed> INITIAL_EXERCISES = List.of(
             new ExerciseSeed("SQUAT", "스쿼트", MeasureType.COUNT, true),
             new ExerciseSeed("HIP_HINGE_DEADLIFT", "힙 힌지 데드리프트", MeasureType.COUNT, true),
             new ExerciseSeed("LUNGE", "런지", MeasureType.COUNT, true),
-            new ExerciseSeed("PLANK", "플랭크", MeasureType.TIME, true)
+            new ExerciseSeed("PLANK", "플랭크", MeasureType.TIME, true),
+            new ExerciseSeed("JUMPING_JACK", "점핑잭", MeasureType.COUNT, true),
+            new ExerciseSeed("HIGH_KNEES", "하이 니", MeasureType.COUNT, true)
     );
 
     private final ExerciseRepository exerciseRepository;

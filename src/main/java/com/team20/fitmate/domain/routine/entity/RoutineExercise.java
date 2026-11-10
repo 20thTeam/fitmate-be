@@ -58,25 +58,38 @@ public class RoutineExercise extends BaseTimeEntity {
     @Column(name = "target_sets", nullable = false)
     private int targetSets;
 
+    /** 운동 설명 태그 (예: 자세 개선 · 하체 근력 강화). 루틴 확인 화면에 보여준다 */
+    @Column(name = "tag", length = 50)
+    private String tag;
+
     private RoutineExercise(Exercise exercise, int sortOrder, Integer targetCount, Integer targetSeconds,
-                            int targetSets) {
+                            int targetSets, String tag) {
         this.exercise = exercise;
         this.sortOrder = sortOrder;
         this.targetCount = targetCount;
         this.targetSeconds = targetSeconds;
         this.targetSets = targetSets;
+        this.tag = tag;
     }
 
     /**
      * 운동의 측정 방식에 맞춰 구성 운동을 만든다.
      *
      * @param amount 횟수형이면 목표 횟수, 시간형이면 목표 시간(초)
+     * @param tag    운동 설명 태그. 없으면 null
+     */
+    public static RoutineExercise of(Exercise exercise, int sortOrder, int amount, int targetSets, String tag) {
+        if (exercise.getMeasureType() == MeasureType.COUNT) {
+            return new RoutineExercise(exercise, sortOrder, amount, null, targetSets, tag);
+        }
+        return new RoutineExercise(exercise, sortOrder, null, amount, targetSets, tag);
+    }
+
+    /**
+     * 설명 태그 없이 구성 운동을 만든다.
      */
     public static RoutineExercise of(Exercise exercise, int sortOrder, int amount, int targetSets) {
-        if (exercise.getMeasureType() == MeasureType.COUNT) {
-            return new RoutineExercise(exercise, sortOrder, amount, null, targetSets);
-        }
-        return new RoutineExercise(exercise, sortOrder, null, amount, targetSets);
+        return of(exercise, sortOrder, amount, targetSets, null);
     }
 
     /**

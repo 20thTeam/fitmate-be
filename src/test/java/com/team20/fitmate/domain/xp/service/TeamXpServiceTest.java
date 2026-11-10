@@ -35,7 +35,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 팀 경험치 적립(PM 확정 산식), 하루 최대치, 레벨 상승, 중복 적립 방지를 확인하는 테스트.
- * 루틴은 자세 개선 목표(스쿼트 10회 × 3세트, 플랭크 20초 × 3세트)로 만든다.
+ * 루틴은 자세 개선 목표(스쿼트 12회 × 3세트, 힙 힌지 10회 × 3세트, 플랭크 30초 × 3세트)로 만든다.
+ * 목표를 모두 채우면 36 + 30 + 15 + 보너스 20 = 101XP라 하루 최대 100XP에 걸린다.
  */
 @SpringBootTest
 @Transactional
@@ -84,31 +85,42 @@ class TeamXpServiceTest {
         return token;
     }
 
-    /** 자세 개선 루틴으로 운동을 시작해 주어진 수행 기록으로 종료한 뒤 운동 기록 식별값을 돌려준다 */
-    private Long finishWorkout(String token, Integer squatValidCount, Integer plankSeconds) {
+    /** 루틴에서 운동 코드로 구성 운동 식별값을 찾는다 */
+    private static Long routineExerciseId(RoutineResponse routine, String exerciseCode) {
+        return routine.exercises().stream()
+                .filter(exercise -> exercise.exerciseCode().equals(exerciseCode))
+                .findFirst().orElseThrow().routineExerciseId();
+    }
+
+    /** 자세 개선 루틴으로 운동을 시작해 주어진 값(null이면 보내지 않음)으로 종료한 뒤 운동 기록 식별값을 돌려준다 */
+    private Long finishWorkout(String token, Integer squatValidCount, Integer hipHingeValidCount, Integer plankSeconds) {
         RoutineResponse routine = routineService.createFirstRound(token, Goal.POSTURE);
         Long workoutId = workoutService.start(token, routine.routineId()).workoutId();
         List<ExerciseRecordRequest> records = new java.util.ArrayList<>();
         if (squatValidCount != null) {
-            records.add(new ExerciseRecordRequest(routine.exercises().get(0).routineExerciseId(),
+            records.add(new ExerciseRecordRequest(routineExerciseId(routine, "SQUAT"),
                     MeasurementStatus.MEASURED, squatValidCount, 0, 0, 60, 3, null));
         }
+        if (hipHingeValidCount != null) {
+            records.add(new ExerciseRecordRequest(routineExerciseId(routine, "HIP_HINGE_DEADLIFT"),
+                    MeasurementStatus.MEASURED, hipHingeValidCount, 0, 0, 60, 3, null));
+        }
         if (plankSeconds != null) {
-            records.add(new ExerciseRecordRequest(routine.exercises().get(1).routineExerciseId(),
+            records.add(new ExerciseRecordRequest(routineExerciseId(routine, "PLANK"),
                     MeasurementStatus.MEASURED, null, null, null, plankSeconds, 3, null));
         }
         workoutService.finish(token, workoutId, new WorkoutFinishRequest(records));
         return workoutId;
     }
 
-    /** 스쿼트 유효 횟수만 보내고 종료한다 (플랭크는 측정 못 함) */
+    /** 스쿼트 유효 횟수만 보내고 종료한다 (나머지는 측정 못 함) */
     private Long finishWorkout(String token, int squatValidCount) {
-        return finishWorkout(token, squatValidCount, null);
+        return finishWorkout(token, squatValidCount, null, null);
     }
 
-    /** 루틴 목표를 모두 채우고 종료한다: 스쿼트 30XP + 플랭크 15XP + 보너스 20XP = 65XP */
+    /** 루틴 목표를 모두 채우고 종료한다: 36 + 30 + 15 + 보너스 20 = 101XP (하루 최대치로 100XP) */
     private Long finishFullRoutine(String token) {
-        return finishWorkout(token, 30, 60);
+        return finishWorkout(token, 36, 30, 90);
     }
 
     /** 지금 팀 누적 경험치 */
@@ -190,13 +202,13 @@ class TeamXpServiceTest {
     }
 
     @Test
-    @DisplayName("루틴 목표를 모두 채우면 보너스 20XP까지 65XP가 적립된다")
+    @DisplayName("루틴 목표를 모두 채우면 보너스까지 101XP지만 하루 최대 100XP로 잘려 적립된다")
     void fullRoutine() {
         String token = participant("아현", true);
 
         Long workoutId = finishFullRoutine(token);
 
-        assertThat(workoutService.getResult(token, workoutId).teamXp().earnedXp()).isEqualTo(65);
+        assertThat(workoutService.getResult(token, workoutId).teamXp().earnedXp()).isEqualTo(100);
     }
 
     @Test
@@ -205,13 +217,15 @@ class TeamXpServiceTest {
         int before = teamTotalXp();
         String token = participant("아현", true);
 
-        Long first = finishFullRoutine(token);
-        Long second = finishFullRoutine(token);
-        Long third = finishFullRoutine(token);
+        Long first = finishWorkout(token, 36);
+        Long second = finishWorkout(token, 36);
+        Long third = finishWorkout(token, 36);
+        Long fourth = finishWorkout(token, 36);
 
-        assertThat(workoutService.getResult(token, first).teamXp().earnedXp()).isEqualTo(65);
-        assertThat(workoutService.getResult(token, second).teamXp().earnedXp()).isEqualTo(35);
-        assertThat(workoutService.getResult(token, third).teamXp().earnedXp()).isZero();
+        assertThat(workoutService.getResult(token, first).teamXp().earnedXp()).isEqualTo(36);
+        assertThat(workoutService.getResult(token, second).teamXp().earnedXp()).isEqualTo(36);
+        assertThat(workoutService.getResult(token, third).teamXp().earnedXp()).isEqualTo(28);
+        assertThat(workoutService.getResult(token, fourth).teamXp().earnedXp()).isZero();
         assertThat(teamTotalXp()).isEqualTo(before + 100);
     }
 
@@ -224,10 +238,10 @@ class TeamXpServiceTest {
         finishFullRoutine(me);
         finishFullRoutine(me);
 
-        Long friendWorkout = finishFullRoutine(friend);
+        Long friendWorkout = finishWorkout(friend, 36);
 
-        assertThat(workoutService.getResult(friend, friendWorkout).teamXp().earnedXp()).isEqualTo(65);
-        assertThat(teamTotalXp()).isEqualTo(before + 165);
+        assertThat(workoutService.getResult(friend, friendWorkout).teamXp().earnedXp()).isEqualTo(36);
+        assertThat(teamTotalXp()).isEqualTo(before + 136);
     }
 
     @Test
@@ -240,11 +254,11 @@ class TeamXpServiceTest {
         Long myWorkout = finishFullRoutine(me);
         Long friendWorkout = finishFullRoutine(friend);
 
-        boolean myLevelUp = TeamLevel.of(before + 65).level() > TeamLevel.of(before).level();
-        boolean friendLevelUp = TeamLevel.of(before + 130).level() > TeamLevel.of(before + 65).level();
+        boolean myLevelUp = TeamLevel.of(before + 100).level() > TeamLevel.of(before).level();
+        boolean friendLevelUp = TeamLevel.of(before + 200).level() > TeamLevel.of(before + 100).level();
         assertThat(workoutService.getResult(me, myWorkout).teamXp().leveledUp()).isEqualTo(myLevelUp);
         assertThat(workoutService.getResult(friend, friendWorkout).teamXp().leveledUp()).isEqualTo(friendLevelUp);
         assertThat(workoutService.getResult(friend, friendWorkout).teamXp().level())
-                .isEqualTo(TeamLevel.of(before + 130).level());
+                .isEqualTo(TeamLevel.of(before + 200).level());
     }
 }
