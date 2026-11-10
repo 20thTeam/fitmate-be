@@ -28,7 +28,6 @@ erDiagram
         id id PK
         string name "팀 이름"
         int total_xp "누적 경험치"
-        int level "NULL 허용, 기준 합의 전 미사용"
     }
     ROOM {
         id id PK
@@ -106,7 +105,8 @@ erDiagram
         id team_id FK
         id participant_id FK
         id workout_id FK,UK "중복 적립 방지"
-        int earned_xp "적립 경험치, 산식 미정"
+        int earned_xp "적립 경험치, 하루 최대치 넘으면 0"
+        int team_total_xp_after "적립 직후 팀 누적, 레벨 상승 표시용"
         datetime created_at
     }
     CHEER {
@@ -131,7 +131,7 @@ erDiagram
 | `ROUTINE_EXERCISE` | 1.2, 1.3 | 횟수형과 시간형 중 하나만 채운다 |
 | `WORKOUT` | 7.1, 8.1, 8.3, 9.1, 10.1 | 한 회차 수행 단위. 이 ID로 경험치 중복을 막는다. 성장 기록(8.3)은 별도 테이블 없이 이 테이블과 `EXERCISE_RECORD`, `ROUTINE`을 참가자 기준으로 모아 조회한다 |
 | `EXERCISE_RECORD` | 3.2, 8.1 | 운동별 수행 기록. 플랭크는 `actual_seconds`로 기록한다. 제출 형식은 [수행기록_형식.md](수행기록_형식.md). `(workout_id, routine_exercise_id)` 유니크 |
-| `TEAM_XP_LOG` | 9.1 | `workout_id` 유니크로 중복 적립을 DB에서 막는다 |
+| `TEAM_XP_LOG` | 9.1 | `workout_id` 유니크로 중복 적립을 DB에서 막는다. 산식은 PM 확정 해커톤 MVP 산식(`MvpXpCalculator`). 팀 레벨은 저장하지 않고 `TEAM.total_xp`로 계산한다(Lv.1 0~99, Lv.2 100~299, Lv.3 300~549, Lv.4 550~849, Lv.5 850 이상) |
 | `CHEER` | 6.1 | 응원 이벤트 기록 |
 | `PUBLIC_PARTY` | 2.4, 10.1 | **제안.** 공개 선셋 파티(P1). 오픈·종료 시각은 설정값이며 정원이 없다. 친구 파티 `ROOM`과 섞지 않는다 |
 
@@ -154,7 +154,7 @@ erDiagram
 | 인원수와 정원 | PM | `ROOM.capacity` |
 | 5일 테스트의 임시 식별 유지 방식 | PM, 백엔드 | `PARTICIPANT.client_token` |
 | 자세 결과 형식 (점수, 등급, 교정 횟수) | PM, AI | `EXERCISE_RECORD.posture_result` |
-| 경험치 산식과 레벨 구간 | 팀 합의 | `TEAM.level`, `TEAM_XP_LOG.earned_xp` |
+| 경험치 산식과 레벨 구간 | PM (해커톤 MVP 기준 확정, 2026-11-09) | `TEAM_XP_LOG.earned_xp`, 레벨 계산 |
 | 경험치 적립 단위 (회차, 운동별) | 팀 합의 | `TEAM_XP_LOG.workout_id` |
 | 난이도, 주요 부위, 예상 시간 표시 여부 | PM | `EXERCISE`, `ROUTINE`에 컬럼 추가 |
 | 수행 부족 시 유지 또는 하향 | PM, AI | `ROUTINE.adjustment_type` |

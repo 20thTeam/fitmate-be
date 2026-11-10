@@ -57,6 +57,13 @@ public enum ErrorCode {
     /** 운동 기록이 없거나 본인 기록이 아님 */
     WORKOUT_NOT_FOUND(HttpStatus.NOT_FOUND, "404-5", "운동 기록을 찾을 수 없습니다."),
 
+    // ===== 팀 =====
+
+    /** 팀이 없음 */
+    TEAM_NOT_FOUND(HttpStatus.NOT_FOUND, "404-6", "팀을 찾을 수 없습니다."),
+
+    // ===== 운동 기록 (충돌) =====
+
     /** 이미 종료된 운동 기록에 다시 제출함 */
     WORKOUT_ALREADY_FINISHED(HttpStatus.CONFLICT, "409-1", "이미 종료된 운동 기록입니다."),
 
