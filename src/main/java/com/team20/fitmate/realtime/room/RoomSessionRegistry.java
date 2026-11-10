@@ -224,7 +224,9 @@ public class RoomSessionRegistry {
      *     <li>보낸 사람: CHEER_SENT (같은 내용). 화면에서 응원 대상을 확인하는 데 쓴다</li>
      *     <li>대상이 같은 방에 없거나(퇴장·다른 방) 연결 불안정: 보낸 사람에게 CHEER_TARGET_UNAVAILABLE. 연결은 유지한다</li>
      *     <li>자기 자신을 대상으로 하면 INVALID_MESSAGE</li>
+     *     <li>같은 대상에게 {@code realtime.cheer-cooldown} 안에 다시 보내면 연타로 보고 오류 없이 무시한다</li>
      * </ul>
+     * 대상이 없어 실패한 응원은 연타 제한 시간에 넣지 않는다.
      */
     public void cheer(String sessionId, CheerPayload cheer) {
         synchronized (lock) {
@@ -246,6 +248,10 @@ public class RoomSessionRegistry {
             Connection target = connectedConnectionOf(room, cheer.targetParticipantId());
             if (target == null) {
                 sendError(connection, RealtimeErrorCode.CHEER_TARGET_UNAVAILABLE);
+                return;
+            }
+            RoomPresence sender = room.presences.get(connection.participantId);
+            if (!sender.tryAcquireCheerSlot(cheer.targetParticipantId(), now, properties.cheerCooldown())) {
                 return;
             }
             send(target, message(ServerMessageType.CHEER_RECEIVED, room.roomId, connection.participantId, now, cheer));

@@ -28,10 +28,10 @@ class RoomSessionRegistryTest {
     private static final int CAPACITY = 5;
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
-    /** 테스트용 설정: JOIN 10초, 응답 30초, 재접속 30초, 동작 정보 2KB·초당 15개 */
+    /** 테스트용 설정: JOIN 10초, 응답 30초, 재접속 30초, 동작 정보 2KB·초당 15개, 응원 연타 1초 */
     private final RealtimeProperties properties = new RealtimeProperties(
             Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofSeconds(30), Duration.ofSeconds(5), 65536,
-            2048, 15);
+            2048, 15, Duration.ofSeconds(1));
 
     private MutableClock clock;
     private RoomSessionRegistry registry;
