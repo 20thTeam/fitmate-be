@@ -13,3 +13,5 @@ realtime:
   heartbeat-timeout: 30s   # 아무 메시지가 없으면 연결 불안정으로 보는 시간 (클라이언트는 10초마다 PING 권장)
   reconnect-grace: 30s     # 연결 불안정 후 재접속을 기다리는 시간. 넘으면 퇴장 처리
   sweep-interval-ms: 1000  # 위 시간들을 확인하는 주기
+  pose-max-bytes: 2048     # 동작 정보(POSE) 메시지 하나의 최대 크기(바이트). 넘으면 INVALID_MESSAGE
+  pose-max-per-second: 15  # 참가자 한 명이 1초에 중계할 수 있는 동작 정보 수. 넘는 메시지는 버린다

@@ -26,9 +26,10 @@ class RoomSessionRegistryTest {
     private static final Long ROOM_ID = 1L;
     private static final int CAPACITY = 5;
 
-    /** 테스트용 시간 설정: JOIN 10초, 응답 30초, 재접속 30초 */
+    /** 테스트용 설정: JOIN 10초, 응답 30초, 재접속 30초, 동작 정보 2KB·초당 15개 */
     private final RealtimeProperties properties = new RealtimeProperties(
-            Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofSeconds(30), Duration.ofSeconds(5), 65536);
+            Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofSeconds(30), Duration.ofSeconds(5), 65536,
+            2048, 15);
 
     private MutableClock clock;
     private RoomSessionRegistry registry;

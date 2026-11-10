@@ -5,6 +5,7 @@ import com.team20.fitmate.realtime.message.ErrorPayload;
 import com.team20.fitmate.realtime.message.LeftPayload;
 import com.team20.fitmate.realtime.message.LeftPayload.LeaveReason;
 import com.team20.fitmate.realtime.message.ParticipantView;
+import com.team20.fitmate.realtime.message.PosePayload;
 import com.team20.fitmate.realtime.message.RealtimeErrorCode;
 import com.team20.fitmate.realtime.message.RoomSnapshotPayload;
 import com.team20.fitmate.realtime.message.ServerMessage;
@@ -177,6 +178,32 @@ public class RoomSessionRegistry {
             presence.updateStatus(status);
             broadcastExcept(room, presence.getParticipantId(),
                     message(ServerMessageType.PARTICIPANT_STATUS, room.roomId, presence.getParticipantId(), now, presence.toStatus()));
+        }
+    }
+
+    /**
+     * 본인의 동작 정보를 같은 방의 다른 참가자에게 PARTICIPANT_POSE로 전달한다(보낸 사람 제외).
+     * <p>
+     * <b>동작 정보는 저장하지 않는다.</b> DB는 물론 이 레지스트리의 참가자 상태에도 남기지 않고, 전달한 뒤 버린다.
+     * 그래서 재접속하거나 새로 입장한 참가자는 ROOM_SNAPSHOT으로 다른 참가자의 자세를 받지 않고, 다음 POSE부터 받는다.
+     * 인식이 끊기면 클라이언트가 POSE를 보내지 않으므로 서버도 아무것도 만들어 보내지 않는다(임의 움직임 없음).
+     */
+    public void relayPose(String sessionId, PosePayload pose) {
+        synchronized (lock) {
+            Connection connection = connections.get(sessionId);
+            if (connection == null) {
+                return;
+            }
+            Instant now = clock.instant();
+            connection.lastSeenAt = now;
+            if (!connection.isJoined()) {
+                sendError(connection, RealtimeErrorCode.JOIN_REQUIRED);
+                return;
+            }
+            RoomState room = rooms.get(connection.roomId);
+            RoomPresence presence = room.presences.get(connection.participantId);
+            broadcastExcept(room, presence.getParticipantId(),
+                    message(ServerMessageType.PARTICIPANT_POSE, room.roomId, presence.getParticipantId(), now, pose));
         }
     }
 
