@@ -187,6 +187,9 @@ public class RoomSessionRegistry {
      * <b>동작 정보는 저장하지 않는다.</b> DB는 물론 이 레지스트리의 참가자 상태에도 남기지 않고, 전달한 뒤 버린다.
      * 그래서 재접속하거나 새로 입장한 참가자는 ROOM_SNAPSHOT으로 다른 참가자의 자세를 받지 않고, 다음 POSE부터 받는다.
      * 인식이 끊기면 클라이언트가 POSE를 보내지 않으므로 서버도 아무것도 만들어 보내지 않는다(임의 움직임 없음).
+     * <p>
+     * 참가자 한 명이 1초에 {@code realtime.pose-max-per-second}개보다 많이 보내면 넘는 메시지는 조용히 버린다.
+     * 한 명의 과도한 전송이 방 전체의 전송 버퍼를 채우지 않게 하려는 것이다. 버려도 연결 유지 시각은 갱신한다.
      */
     public void relayPose(String sessionId, PosePayload pose) {
         synchronized (lock) {
@@ -202,6 +205,9 @@ public class RoomSessionRegistry {
             }
             RoomState room = rooms.get(connection.roomId);
             RoomPresence presence = room.presences.get(connection.participantId);
+            if (!presence.tryAcquirePoseSlot(now, properties.poseMaxPerSecond())) {
+                return;
+            }
             broadcastExcept(room, presence.getParticipantId(),
                     message(ServerMessageType.PARTICIPANT_POSE, room.roomId, presence.getParticipantId(), now, pose));
         }

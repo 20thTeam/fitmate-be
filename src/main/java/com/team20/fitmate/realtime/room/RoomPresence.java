@@ -2,10 +2,13 @@ package com.team20.fitmate.realtime.room;
 
 import com.team20.fitmate.realtime.message.ParticipantView;
 import com.team20.fitmate.realtime.message.StatusPayload;
+import lombok.AccessLevel;
 import lombok.Getter;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayDeque;
+import java.util.Deque;
 
 /**
  * 운동방 안 참가자 한 명의 현재 상태. 메모리에만 있고 DB에 저장하지 않는다.
@@ -14,6 +17,9 @@ import java.time.Instant;
  */
 @Getter
 class RoomPresence {
+
+    /** 동작 정보 빈도 상한을 세는 창의 길이 */
+    static final Duration POSE_WINDOW = Duration.ofSeconds(1);
 
     /** 참가자 식별값 */
     private final Long participantId;
@@ -41,6 +47,13 @@ class RoomPresence {
 
     /** 연결 불안정이 된 시각. 연결됨이면 null */
     private Instant unstableSince;
+
+    /**
+     * 최근 1초 안에 중계한 동작 정보의 시각(오래된 것부터). 빈도 상한 계산에만 쓴다.
+     * 동작 정보 내용은 담지 않는다.
+     */
+    @Getter(AccessLevel.NONE)
+    private final Deque<Instant> recentPoseTimes = new ArrayDeque<>();
 
     RoomPresence(JoinTicket ticket, String sessionId) {
         this.participantId = ticket.participantId();
@@ -74,6 +87,26 @@ class RoomPresence {
         this.exerciseId = status.exerciseId();
         this.exerciseName = status.exerciseName();
         this.progressStatus = status.progressStatus();
+    }
+
+    /**
+     * 동작 정보를 하나 더 중계해도 되는지 확인하고, 되면 지금 시각을 기록한다.
+     * <p>
+     * 최근 {@link #POSE_WINDOW} 안에 중계한 수가 {@code maxPerWindow}보다 적을 때만 허용한다(움직이는 1초 창).
+     * 네트워크 때문에 메시지가 몰려 와도 1초 평균이 상한 안이면 버리지 않는다.
+     *
+     * @return 중계해도 되면 true, 상한을 넘어 버려야 하면 false
+     */
+    boolean tryAcquirePoseSlot(Instant now, int maxPerWindow) {
+        Instant windowStart = now.minus(POSE_WINDOW);
+        while (!recentPoseTimes.isEmpty() && !recentPoseTimes.peekFirst().isAfter(windowStart)) {
+            recentPoseTimes.pollFirst();
+        }
+        if (recentPoseTimes.size() >= maxPerWindow) {
+            return false;
+        }
+        recentPoseTimes.addLast(now);
+        return true;
     }
 
     /**
