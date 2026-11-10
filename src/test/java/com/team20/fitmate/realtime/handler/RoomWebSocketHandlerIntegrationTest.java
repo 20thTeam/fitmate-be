@@ -303,6 +303,62 @@ class RoomWebSocketHandlerIntegrationTest {
         assertThat(client.isOpen()).isTrue();
     }
 
+    // ===== 동작 정보(POSE) — 이슈 #4 =====
+
+    /** 관절 n개짜리 POSE 메시지 */
+    private static String pose(int landmarkCount) {
+        StringBuilder builder = new StringBuilder("{\"type\":\"POSE\",\"payload\":{\"landmarks\":[");
+        for (int i = 0; i < landmarkCount; i++) {
+            builder.append(i == 0 ? "" : ",").append("[0.012,-0.531,0.104,0.98]");
+        }
+        return builder.append("]}}").toString();
+    }
+
+    @Test
+    @DisplayName("POSE를 보내면 다른 참가자가 PARTICIPANT_POSE로 같은 관절 배열을 받는다")
+    void poseRelayed() throws Exception {
+        ParticipantCreateResponse juyoung = enteredParticipant("주영");
+        ParticipantCreateResponse jisu = enteredParticipant("지수");
+        TestClient first = joinedClient(juyoung);
+        TestClient second = joinedClient(jisu);
+        first.next(); // 지수 입장 알림
+
+        first.send(pose(13));
+
+        JsonNode relayed = second.next();
+        assertThat(relayed.path("type").asString()).isEqualTo("PARTICIPANT_POSE");
+        assertThat(relayed.path("roomId").asLong()).isEqualTo(roomId);
+        assertThat(relayed.path("participantId").asLong()).isEqualTo(juyoung.participantId());
+        assertThat(relayed.path("sentAt").asString()).isNotBlank();
+        assertThat(relayed.path("payload").propertyNames()).containsExactly("landmarks");
+        assertThat(relayed.path("payload").path("landmarks")).hasSize(13);
+        assertThat(relayed.path("payload").path("landmarks").get(0).get(1).asDouble()).isEqualTo(-0.531);
+
+        // 보낸 사람에게는 돌아오지 않는다: 다음으로 받는 것은 PING의 응답이어야 한다
+        first.send("{\"type\":\"PING\"}");
+        assertThat(first.next().path("type").asString()).isEqualTo("PONG");
+    }
+
+    @Test
+    @DisplayName("2KB를 넘는 POSE와 모양이 틀린 POSE는 INVALID_MESSAGE를 받고 연결은 유지된다")
+    void invalidPose() throws Exception {
+        TestClient client = joinedClient(enteredParticipant("주영"));
+        String oversized = "{\"type\":\"POSE\",\"payload\":{\"landmarks\":[[0.1,0.2,0.3]],\"pad\":\"" + "x".repeat(2100) + "\"}}";
+
+        client.send(oversized);
+        JsonNode error = client.next();
+        assertThat(error.path("payload").path("code").asString()).isEqualTo("INVALID_MESSAGE");
+        assertThat(error.path("payload").path("closed").asBoolean()).isFalse();
+
+        client.send("{\"type\":\"POSE\",\"payload\":{\"landmarks\":[[0.1,0.2]]}}");
+        assertThat(client.next().path("payload").path("code").asString()).isEqualTo("INVALID_MESSAGE");
+
+        client.send(pose(33)); // 33개는 약 0.9KB라 2KB 안에 든다
+        client.send("{\"type\":\"PING\"}");
+        assertThat(client.next().path("type").asString()).as("정상 POSE에는 오류가 오지 않는다").isEqualTo("PONG");
+        assertThat(client.isOpen()).isTrue();
+    }
+
     /**
      * 받은 메시지를 큐에 모으는 테스트용 WebSocket 클라이언트.
      */

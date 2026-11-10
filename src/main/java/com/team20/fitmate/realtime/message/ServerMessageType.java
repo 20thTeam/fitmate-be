@@ -19,6 +19,9 @@ public enum ServerMessageType {
     /** 다른 참가자의 현재 운동·진행 상태가 바뀜 */
     PARTICIPANT_STATUS,
 
+    /** 다른 참가자의 동작 정보. 받은 그대로 전달하며 DB에 저장하지 않는다 */
+    PARTICIPANT_POSE,
+
     /** 다른 참가자의 연결 상태가 바뀜(연결됨 ↔ 연결 불안정) */
     CONNECTION_STATUS,
 

@@ -1,6 +1,7 @@
 package com.team20.fitmate.realtime.room;
 
 import com.team20.fitmate.realtime.message.ParticipantView;
+import com.team20.fitmate.realtime.message.PosePayload;
 import com.team20.fitmate.realtime.message.RealtimeErrorCode;
 import com.team20.fitmate.realtime.message.StatusPayload;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,10 +26,12 @@ class RoomSessionRegistryTest {
 
     private static final Long ROOM_ID = 1L;
     private static final int CAPACITY = 5;
+    private static final JsonMapper MAPPER = JsonMapper.builder().build();
 
-    /** 테스트용 시간 설정: JOIN 10초, 응답 30초, 재접속 30초 */
+    /** 테스트용 설정: JOIN 10초, 응답 30초, 재접속 30초, 동작 정보 2KB·초당 15개 */
     private final RealtimeProperties properties = new RealtimeProperties(
-            Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofSeconds(30), Duration.ofSeconds(5), 65536);
+            Duration.ofSeconds(10), Duration.ofSeconds(30), Duration.ofSeconds(30), Duration.ofSeconds(5), 65536,
+            2048, 15);
 
     private MutableClock clock;
     private RoomSessionRegistry registry;
@@ -278,6 +281,136 @@ class RoomSessionRegistryTest {
         registry.leave("s1");
 
         assertThat(registry.participants(ROOM_ID)).isEmpty();
+    }
+
+    // ===== 동작 정보(POSE) — 이슈 #4 =====
+
+    /** 관절 두 개짜리 동작 정보 */
+    private PosePayload pose() {
+        JsonNode payload = MAPPER.readTree("{\"landmarks\":[[0.012,-0.531,0.104,0.98],[0.153,-0.402,0.061,0.97]]}");
+        return PosePayload.from(payload);
+    }
+
+    @Test
+    @DisplayName("동작 정보는 같은 방의 다른 참가자에게만 받은 관절 배열 그대로 전달된다")
+    void poseRelayedToOthersOnly() {
+        FakeWebSocketSession first = joined("s1", 1, "주영");
+        FakeWebSocketSession second = joined("s2", 2, "지수");
+        FakeWebSocketSession third = joined("s3", 3, "민호");
+
+        registry.relayPose("s1", pose());
+
+        for (FakeWebSocketSession other : new FakeWebSocketSession[]{second, third}) {
+            JsonNode relayed = other.last();
+            assertThat(relayed.path("type").asString()).isEqualTo("PARTICIPANT_POSE");
+            assertThat(relayed.path("roomId").asLong()).isEqualTo(ROOM_ID);
+            assertThat(relayed.path("participantId").asLong()).isEqualTo(1);
+            assertThat(relayed.path("payload").path("landmarks").get(0).get(1).asDouble()).isEqualTo(-0.531);
+        }
+        assertThat(first.sentOf("PARTICIPANT_POSE")).as("보낸 사람에게는 돌아오지 않는다").isEmpty();
+    }
+
+    @Test
+    @DisplayName("동작 정보를 받아도 참가자 상태(스냅샷)에는 남지 않는다")
+    void poseNotKeptInState() {
+        joined("s1", 1, "주영");
+        joined("s2", 2, "지수");
+        registry.relayPose("s1", pose());
+
+        FakeWebSocketSession third = joined("s3", 3, "민호");
+
+        assertThat(third.last().path("type").asString()).isEqualTo("ROOM_SNAPSHOT");
+        assertThat(third.last().toString()).doesNotContain("landmarks");
+    }
+
+    @Test
+    @DisplayName("1초 안에 상한(15개)을 넘는 동작 정보는 버리고, 1초가 지나면 다시 전달한다")
+    void poseRateLimited() {
+        joined("s1", 1, "주영");
+        FakeWebSocketSession second = joined("s2", 2, "지수");
+
+        for (int i = 0; i < 20; i++) {
+            registry.relayPose("s1", pose());
+            clock.advance(Duration.ofMillis(10));
+        }
+        assertThat(second.sentOf("PARTICIPANT_POSE")).hasSize(15);
+
+        clock.advance(Duration.ofSeconds(1));
+        registry.relayPose("s1", pose());
+        assertThat(second.sentOf("PARTICIPANT_POSE")).hasSize(16);
+    }
+
+    @Test
+    @DisplayName("빈도 상한은 참가자마다 따로 센다")
+    void poseRateLimitPerParticipant() {
+        joined("s1", 1, "주영");
+        joined("s2", 2, "지수");
+        FakeWebSocketSession third = joined("s3", 3, "민호");
+
+        for (int i = 0; i < 20; i++) {
+            registry.relayPose("s1", pose());
+        }
+        registry.relayPose("s2", pose());
+
+        assertThat(third.sentOf("PARTICIPANT_POSE"))
+                .filteredOn(message -> message.path("participantId").asLong() == 2)
+                .hasSize(1);
+    }
+
+    @Test
+    @DisplayName("상한을 넘어 버린 동작 정보도 연결 유지 신호로 센다")
+    void droppedPoseKeepsConnectionAlive() {
+        FakeWebSocketSession first = joined("s1", 1, "주영");
+        for (int i = 0; i < 15; i++) {
+            registry.relayPose("s1", pose()); // 0초: 15개 전달
+        }
+        clock.advance(Duration.ofMillis(900));
+        registry.relayPose("s1", pose()); // 0.9초: 상한이라 버려짐
+
+        clock.advance(Duration.ofMillis(29_600)); // 30.5초: 마지막 전달 기준이면 응답 없음(30초)을 넘음
+        registry.sweep();
+
+        assertThat(first.isOpen()).isTrue();
+        assertThat(viewOf(1).connectionStatus()).isEqualTo(ConnectionStatus.CONNECTED);
+    }
+
+    @Test
+    @DisplayName("카메라 오류(CAMERA_ERROR) 상태 참가자의 동작 정보는 전달하지 않는다")
+    void cameraErrorPoseNotRelayed() {
+        FakeWebSocketSession first = joined("s1", 1, "주영");
+        FakeWebSocketSession second = joined("s2", 2, "지수");
+        registry.updateStatus("s1", new StatusPayload(null, null, ProgressStatus.CAMERA_ERROR));
+
+        registry.relayPose("s1", pose());
+
+        assertThat(second.sentOf("PARTICIPANT_POSE")).isEmpty();
+        assertThat(first.sentOf("ERROR")).as("보낸 사람에게도 오류를 보내지 않는다").isEmpty();
+    }
+
+    @Test
+    @DisplayName("카메라 오류가 풀려 다른 상태가 되면 다시 전달한다")
+    void poseRelayedAfterCameraRecovered() {
+        joined("s1", 1, "주영");
+        FakeWebSocketSession second = joined("s2", 2, "지수");
+        registry.updateStatus("s1", new StatusPayload(null, null, ProgressStatus.CAMERA_ERROR));
+        registry.relayPose("s1", pose());
+
+        registry.updateStatus("s1", new StatusPayload(3L, "스쿼트", ProgressStatus.EXERCISING));
+        registry.relayPose("s1", pose());
+
+        assertThat(second.sentOf("PARTICIPANT_POSE")).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("JOIN 전에 동작 정보를 보내면 JOIN_REQUIRED를 받는다")
+    void poseBeforeJoin() {
+        FakeWebSocketSession session = new FakeWebSocketSession("s1");
+        registry.connect(session);
+
+        registry.relayPose("s1", pose());
+
+        assertThat(session.last().path("payload").path("code").asString()).isEqualTo("JOIN_REQUIRED");
+        assertThat(session.isOpen()).isTrue();
     }
 
     /**

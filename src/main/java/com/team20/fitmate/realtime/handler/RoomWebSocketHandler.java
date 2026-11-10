@@ -2,6 +2,7 @@ package com.team20.fitmate.realtime.handler;
 
 import com.team20.fitmate.realtime.message.ClientMessageType;
 import com.team20.fitmate.realtime.message.JoinPayload;
+import com.team20.fitmate.realtime.message.PosePayload;
 import com.team20.fitmate.realtime.message.RealtimeErrorCode;
 import com.team20.fitmate.realtime.message.RealtimeException;
 import com.team20.fitmate.realtime.message.StatusPayload;
@@ -61,6 +62,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             switch (type) {
                 case JOIN -> handleJoin(sessionId, payload);
                 case STATUS -> handleStatus(sessionId, payload);
+                case POSE -> handlePose(sessionId, message, payload);
                 case PING -> registry.ping(sessionId);
                 case LEAVE -> registry.leave(sessionId);
             }
@@ -99,6 +101,23 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             throw new RealtimeException(RealtimeErrorCode.INVALID_MESSAGE);
         }
         registry.updateStatus(sessionId, status);
+    }
+
+    /**
+     * POSE: 크기와 관절 배열 모양만 검사하고 같은 방에 전달한다. 좌표는 해석하지 않고 저장하지도 않는다.
+     * <p>
+     * 크기 상한({@code realtime.pose-max-bytes})을 넘으면 INVALID_MESSAGE로 거절한다.
+     * 동작 정보는 자주 오므로 큰 메시지 하나가 방 전체 전송을 막지 않게 하려는 것이다.
+     */
+    private void handlePose(String sessionId, TextMessage message, JsonNode payload) {
+        if (message.getPayloadLength() > properties.poseMaxBytes()) {
+            throw new RealtimeException(RealtimeErrorCode.INVALID_MESSAGE);
+        }
+        PosePayload pose = PosePayload.from(payload);
+        if (pose == null) {
+            throw new RealtimeException(RealtimeErrorCode.INVALID_MESSAGE);
+        }
+        registry.relayPose(sessionId, pose);
     }
 
     /**
