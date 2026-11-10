@@ -32,7 +32,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * {@link WorkoutService}의 운동 시작·종료와 재제출 거부를 확인하는 테스트.
- * 루틴은 자세 개선 목표(스쿼트 횟수형 + 플랭크 시간형)로 만든다.
+ * 루틴은 자세 개선 목표(스쿼트·힙 힌지 횟수형 + 플랭크 시간형)로 만든다.
  */
 @SpringBootTest
 @Transactional
@@ -154,14 +154,15 @@ class WorkoutServiceTest {
 
         assertThat(finished.status()).isEqualTo(WorkoutStatus.FINISHED);
         assertThat(finished.finishedAt()).isNotNull();
-        assertThat(finished.records()).hasSize(2);
+        assertThat(finished.records()).extracting(ExerciseRecordResponse::exerciseCode)
+                .containsExactly("SQUAT", "HIP_HINGE_DEADLIFT", "PLANK");
 
         ExerciseRecordResponse squat = finished.records().get(0);
         assertThat(squat.exerciseCode()).isEqualTo("SQUAT");
         assertThat(squat.measurementStatus()).isEqualTo(MeasurementStatus.MEASURED);
         assertThat(squat.validCount()).isEqualTo(10);
 
-        ExerciseRecordResponse plank = finished.records().get(1);
+        ExerciseRecordResponse plank = finished.records().get(2);
         assertThat(plank.exerciseCode()).isEqualTo("PLANK");
         assertThat(plank.measurementStatus()).isEqualTo(MeasurementStatus.NOT_MEASURED);
         assertThat(plank.validCount()).isNull();
@@ -177,7 +178,8 @@ class WorkoutServiceTest {
 
         assertError(() -> workoutService.finish(token, workout.workoutId(), request),
                 ErrorCode.WORKOUT_ALREADY_FINISHED);
-        assertThat(exerciseRecordRepository.findByWorkoutIdOrderByIdAsc(workout.workoutId())).hasSize(2);
+        assertThat(exerciseRecordRepository.findByWorkoutIdOrderByIdAsc(workout.workoutId()))
+                .hasSize(routine.exercises().size());
     }
 
     @Test

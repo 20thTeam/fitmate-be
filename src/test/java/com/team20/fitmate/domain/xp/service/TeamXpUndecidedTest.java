@@ -100,7 +100,7 @@ class TeamXpUndecidedTest {
         assertThat(result.teamXp().teamId()).isEqualTo(room.teamId());
         assertThat(result.teamXp().earnedXp()).isNull();
         assertThat(result.teamXp().totalXp()).isNull();
-        assertThat(result.workout().records()).hasSize(2);
+        assertThat(result.workout().records()).hasSize(routine.exercises().size());
         assertThat(teamXpLogRepository.findByWorkoutId(workoutId)).isEmpty();
 
         TeamXpResponse team = teamXpService.getTeamXp(room.teamId());

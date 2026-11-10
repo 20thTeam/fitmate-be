@@ -52,6 +52,9 @@ class RoutineControllerTest {
                 .andExpect(jsonPath("$.data.goalName").value("근력 강화"))
                 .andExpect(jsonPath("$.data.exercises[0].sortOrder").value(1))
                 .andExpect(jsonPath("$.data.exercises[0].name").isString())
+                .andExpect(jsonPath("$.data.exercises[0].exerciseCode").value("SQUAT"))
+                .andExpect(jsonPath("$.data.exercises[0].tag").value("근력 강화 · 하체"))
+                .andExpect(jsonPath("$.data.exercises[0].routineExerciseId").isNumber())
                 .andReturn().getResponse().getContentAsString();
         Integer routineId = JsonPath.read(body, "$.data.routineId");
 

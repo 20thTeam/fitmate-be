@@ -28,5 +28,6 @@ class DefaultRoutineRecommenderTest {
             assertThat(item.sets()).isPositive();
         });
         assertThat(recommended).extracting(RecommendedExercise::exerciseCode).doesNotHaveDuplicates();
+        assertThat(recommended).extracting(RecommendedExercise::tag).doesNotContainNull();
     }
 }
