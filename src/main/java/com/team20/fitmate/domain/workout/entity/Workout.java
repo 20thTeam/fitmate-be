@@ -4,6 +4,8 @@ import com.team20.fitmate.domain.participant.entity.Participant;
 import com.team20.fitmate.domain.room.entity.Room;
 import com.team20.fitmate.domain.routine.entity.Routine;
 import com.team20.fitmate.global.common.BaseTimeEntity;
+import com.team20.fitmate.global.exception.CustomException;
+import com.team20.fitmate.global.exception.ErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -24,8 +26,8 @@ import java.time.LocalDateTime;
 /**
  * 운동 기록. 참가자가 한 회차를 수행한 기록이며, 이 식별값으로 팀 경험치 중복 적립을 막는다.
  * <p>
- * S3에서는 수행 기록({@link ExerciseRecord})이 붙을 수 있도록 뼈대만 둔다.
- * 시작·종료 API와 재제출 거부는 운동 진행 슬라이스(S7)에서, 분석 상태는 결과 슬라이스(S8)에서 추가한다.
+ * 시작하면 진행 중이고, 종료하면 운동별 수행 기록({@link ExerciseRecord})이 확정되며 다시 바꿀 수 없다.
+ * 연결이 끊겨도 진행 중으로 남아 재접속 후 같은 기록으로 이어 간다. 분석 상태는 결과 슬라이스(S8)에서 추가한다.
  */
 @Getter
 @Entity
@@ -79,5 +81,32 @@ public class Workout extends BaseTimeEntity {
      */
     public static Workout start(Participant participant, Routine routine, Room room, LocalDateTime startedAt) {
         return new Workout(participant, routine, room, startedAt);
+    }
+
+    /**
+     * 운동을 종료한다. 수행 기록 확정은 서비스가 이 호출과 같은 트랜잭션에서 한다.
+     *
+     * @throws CustomException 이미 종료됐으면 {@link ErrorCode#WORKOUT_ALREADY_FINISHED}
+     */
+    public void finish(LocalDateTime finishedAt) {
+        if (isFinished()) {
+            throw new CustomException(ErrorCode.WORKOUT_ALREADY_FINISHED);
+        }
+        this.status = WorkoutStatus.FINISHED;
+        this.finishedAt = finishedAt;
+    }
+
+    /**
+     * 종료된 운동 기록인지 확인한다.
+     */
+    public boolean isFinished() {
+        return status == WorkoutStatus.FINISHED;
+    }
+
+    /**
+     * 이 운동 기록이 해당 참가자의 것인지 확인한다.
+     */
+    public boolean isOwnedBy(Participant participant) {
+        return this.participant.getId().equals(participant.getId());
     }
 }

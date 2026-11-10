@@ -63,10 +63,19 @@ public class RoutineService {
     @Transactional(readOnly = true)
     public RoutineResponse get(String clientToken, Long routineId) {
         Participant participant = participantService.findByClientToken(clientToken);
-        Routine routine = routineRepository.findById(routineId)
+        return RoutineResponse.from(findOwnedRoutine(participant, routineId));
+    }
+
+    /**
+     * 참가자 본인의 루틴 엔티티를 찾는다. 운동 시작 등 다른 서비스에서도 쓴다.
+     *
+     * @throws CustomException 없거나 다른 참가자의 루틴이면 {@link ErrorCode#ROUTINE_NOT_FOUND}
+     */
+    @Transactional(readOnly = true)
+    public Routine findOwnedRoutine(Participant participant, Long routineId) {
+        return routineRepository.findById(routineId)
                 .filter(found -> found.isOwnedBy(participant))
                 .orElseThrow(() -> new CustomException(ErrorCode.ROUTINE_NOT_FOUND));
-        return RoutineResponse.from(routine);
     }
 
     /**
