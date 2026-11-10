@@ -1,5 +1,6 @@
 package com.team20.fitmate.realtime.handler;
 
+import com.team20.fitmate.realtime.message.CheerPayload;
 import com.team20.fitmate.realtime.message.ClientMessageType;
 import com.team20.fitmate.realtime.message.JoinPayload;
 import com.team20.fitmate.realtime.message.PosePayload;
@@ -63,6 +64,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                 case JOIN -> handleJoin(sessionId, payload);
                 case STATUS -> handleStatus(sessionId, payload);
                 case POSE -> handlePose(sessionId, message, payload);
+                case CHEER -> handleCheer(sessionId, payload);
                 case PING -> registry.ping(sessionId);
                 case LEAVE -> registry.leave(sessionId);
             }
@@ -118,6 +120,17 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             throw new RealtimeException(RealtimeErrorCode.INVALID_MESSAGE);
         }
         registry.relayPose(sessionId, pose);
+    }
+
+    /**
+     * CHEER: 대상·리액션 형식을 검사하고 대상 한 명에게만 전달한다.
+     */
+    private void handleCheer(String sessionId, JsonNode payload) {
+        CheerPayload cheer = jsonMapper.treeToValue(payload, CheerPayload.class);
+        if (cheer == null || !cheer.hasValidFormat()) {
+            throw new RealtimeException(RealtimeErrorCode.INVALID_MESSAGE);
+        }
+        registry.cheer(sessionId, cheer);
     }
 
     /**
