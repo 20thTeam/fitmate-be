@@ -90,6 +90,16 @@ class RoomPresence {
     }
 
     /**
+     * 이 참가자의 동작 정보를 다른 참가자와 공유해도 되는지 확인한다.
+     * <p>
+     * 카메라 권한 거부·장치 오류(CAMERA_ERROR) 상태라고 본인이 알린 참가자는 공유하지 않는다.
+     * 상태를 바꾼 직후에 늦게 도착한 동작 정보도 여기서 걸러진다.
+     */
+    boolean canSharePose() {
+        return progressStatus != ProgressStatus.CAMERA_ERROR;
+    }
+
+    /**
      * 동작 정보를 하나 더 중계해도 되는지 확인하고, 되면 지금 시각을 기록한다.
      * <p>
      * 최근 {@link #POSE_WINDOW} 안에 중계한 수가 {@code maxPerWindow}보다 적을 때만 허용한다(움직이는 1초 창).

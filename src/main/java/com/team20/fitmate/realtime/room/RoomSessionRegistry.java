@@ -190,6 +190,9 @@ public class RoomSessionRegistry {
      * <p>
      * 참가자 한 명이 1초에 {@code realtime.pose-max-per-second}개보다 많이 보내면 넘는 메시지는 조용히 버린다.
      * 한 명의 과도한 전송이 방 전체의 전송 버퍼를 채우지 않게 하려는 것이다. 버려도 연결 유지 시각은 갱신한다.
+     * <p>
+     * 진행 상태가 CAMERA_ERROR(카메라 권한 거부·장치 오류)인 참가자의 동작 정보는 중계하지 않고 조용히 버린다.
+     * 버린 메시지는 빈도 상한 계산에도 넣지 않는다.
      */
     public void relayPose(String sessionId, PosePayload pose) {
         synchronized (lock) {
@@ -205,7 +208,7 @@ public class RoomSessionRegistry {
             }
             RoomState room = rooms.get(connection.roomId);
             RoomPresence presence = room.presences.get(connection.participantId);
-            if (!presence.tryAcquirePoseSlot(now, properties.poseMaxPerSecond())) {
+            if (!presence.canSharePose() || !presence.tryAcquirePoseSlot(now, properties.poseMaxPerSecond())) {
                 return;
             }
             broadcastExcept(room, presence.getParticipantId(),
