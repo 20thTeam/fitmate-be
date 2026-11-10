@@ -1,5 +1,7 @@
 package com.team20.fitmate.realtime.room;
 
+import com.team20.fitmate.domain.cheer.dto.CheerRecordCommand;
+import com.team20.fitmate.realtime.message.CheerPayload;
 import com.team20.fitmate.realtime.message.ParticipantView;
 import com.team20.fitmate.realtime.message.PosePayload;
 import com.team20.fitmate.realtime.message.RealtimeErrorCode;
@@ -15,6 +17,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -411,6 +414,130 @@ class RoomSessionRegistryTest {
 
         assertThat(session.last().path("payload").path("code").asString()).isEqualTo("JOIN_REQUIRED");
         assertThat(session.isOpen()).isTrue();
+    }
+
+    // ===== 응원(CHEER) — 이슈 #6 =====
+
+    @Test
+    @DisplayName("응원은 대상에게만 CHEER_RECEIVED로 가고, 보낸 사람은 CHEER_SENT를 받고, 다른 참가자는 아무것도 받지 않는다")
+    void cheerDeliveredOnlyToTarget() {
+        FakeWebSocketSession sender = joined("s1", 1, "주영");
+        FakeWebSocketSession target = joined("s2", 2, "지수");
+        FakeWebSocketSession other = joined("s3", 3, "민호");
+        int otherBefore = other.sent().size();
+
+        Optional<CheerRecordCommand> recorded = registry.cheer("s1", new CheerPayload(2L, "FIRE"));
+
+        JsonNode received = target.last();
+        assertThat(received.path("type").asString()).isEqualTo("CHEER_RECEIVED");
+        assertThat(received.path("participantId").asLong()).as("보낸 사람").isEqualTo(1);
+        assertThat(received.path("payload").path("targetParticipantId").asLong()).isEqualTo(2);
+        assertThat(received.path("payload").path("reaction").asString()).isEqualTo("FIRE");
+
+        JsonNode sent = sender.last();
+        assertThat(sent.path("type").asString()).isEqualTo("CHEER_SENT");
+        assertThat(sent.path("payload").path("targetParticipantId").asLong()).isEqualTo(2);
+
+        assertThat(other.sent()).as("다른 참가자에게는 아무것도 가지 않는다").hasSize(otherBefore);
+        assertThat(recorded).contains(new CheerRecordCommand(ROOM_ID, 1L, 2L, "FIRE", clock.instant()));
+    }
+
+    @Test
+    @DisplayName("대상이 퇴장했으면 보낸 사람에게 CHEER_TARGET_UNAVAILABLE을 보내고 연결은 유지하며 저장하지 않는다")
+    void cheerTargetLeft() {
+        FakeWebSocketSession sender = joined("s1", 1, "주영");
+        joined("s2", 2, "지수");
+        registry.leave("s2");
+
+        Optional<CheerRecordCommand> recorded = registry.cheer("s1", new CheerPayload(2L, "FIRE"));
+
+        assertThat(sender.last().path("payload").path("code").asString()).isEqualTo("CHEER_TARGET_UNAVAILABLE");
+        assertThat(sender.last().path("payload").path("closed").asBoolean()).isFalse();
+        assertThat(sender.isOpen()).isTrue();
+        assertThat(recorded).isEmpty();
+    }
+
+    @Test
+    @DisplayName("대상이 연결 불안정이거나 방에 없는 참가자면 CHEER_TARGET_UNAVAILABLE을 받는다")
+    void cheerTargetUnstableOrUnknown() {
+        FakeWebSocketSession sender = joined("s1", 1, "주영");
+        joined("s2", 2, "지수");
+        registry.disconnected("s2");
+
+        assertThat(registry.cheer("s1", new CheerPayload(2L, "FIRE"))).isEmpty();
+        assertThat(sender.last().path("payload").path("code").asString()).isEqualTo("CHEER_TARGET_UNAVAILABLE");
+
+        assertThat(registry.cheer("s1", new CheerPayload(99L, "FIRE"))).isEmpty();
+        assertThat(sender.last().path("payload").path("code").asString()).isEqualTo("CHEER_TARGET_UNAVAILABLE");
+    }
+
+    @Test
+    @DisplayName("자기 자신에게 응원하면 INVALID_MESSAGE를 받는다")
+    void cheerSelf() {
+        FakeWebSocketSession sender = joined("s1", 1, "주영");
+
+        assertThat(registry.cheer("s1", new CheerPayload(1L, "FIRE"))).isEmpty();
+        assertThat(sender.last().path("payload").path("code").asString()).isEqualTo("INVALID_MESSAGE");
+    }
+
+    @Test
+    @DisplayName("같은 친구에게 1초 안에 다시 보낸 응원은 오류 없이 무시하고, 1초가 지나면 다시 전달한다")
+    void cheerCooldownPerTarget() {
+        FakeWebSocketSession sender = joined("s1", 1, "주영");
+        FakeWebSocketSession target = joined("s2", 2, "지수");
+
+        registry.cheer("s1", new CheerPayload(2L, "FIRE"));
+        clock.advance(Duration.ofMillis(500));
+        Optional<CheerRecordCommand> ignored = registry.cheer("s1", new CheerPayload(2L, "CLAP"));
+
+        assertThat(ignored).isEmpty();
+        assertThat(target.sentOf("CHEER_RECEIVED")).hasSize(1);
+        assertThat(sender.sentOf("CHEER_SENT")).hasSize(1);
+        assertThat(sender.sentOf("ERROR")).as("연타는 오류 없이 무시한다").isEmpty();
+
+        clock.advance(Duration.ofMillis(500));
+        assertThat(registry.cheer("s1", new CheerPayload(2L, "CLAP"))).isPresent();
+        assertThat(target.sentOf("CHEER_RECEIVED")).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("연타 제한은 대상마다 따로 센다 (B에게 보낸 직후 C에게는 보낼 수 있다)")
+    void cheerCooldownSeparatePerTarget() {
+        joined("s1", 1, "주영");
+        FakeWebSocketSession second = joined("s2", 2, "지수");
+        FakeWebSocketSession third = joined("s3", 3, "민호");
+
+        registry.cheer("s1", new CheerPayload(2L, "FIRE"));
+        registry.cheer("s1", new CheerPayload(3L, "FIRE"));
+
+        assertThat(second.sentOf("CHEER_RECEIVED")).hasSize(1);
+        assertThat(third.sentOf("CHEER_RECEIVED")).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("대상이 없어 실패한 응원은 연타 제한에 넣지 않는다 (대상이 돌아오면 바로 보낼 수 있다)")
+    void failedCheerDoesNotStartCooldown() {
+        joined("s1", 1, "주영");
+        joined("s2", 2, "지수");
+        registry.disconnected("s2");
+        registry.cheer("s1", new CheerPayload(2L, "FIRE"));
+
+        FakeWebSocketSession rejoined = new FakeWebSocketSession("s2-new");
+        registry.connect(rejoined);
+        registry.join("s2-new", ticket(2, "지수"));
+
+        assertThat(registry.cheer("s1", new CheerPayload(2L, "FIRE"))).isPresent();
+        assertThat(rejoined.sentOf("CHEER_RECEIVED")).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("JOIN 전에 응원을 보내면 JOIN_REQUIRED를 받는다")
+    void cheerBeforeJoin() {
+        FakeWebSocketSession session = new FakeWebSocketSession("s1");
+        registry.connect(session);
+
+        assertThat(registry.cheer("s1", new CheerPayload(2L, "FIRE"))).isEmpty();
+        assertThat(session.last().path("payload").path("code").asString()).isEqualTo("JOIN_REQUIRED");
     }
 
     /**

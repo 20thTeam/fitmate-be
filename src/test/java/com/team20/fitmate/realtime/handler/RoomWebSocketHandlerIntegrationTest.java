@@ -1,5 +1,7 @@
 package com.team20.fitmate.realtime.handler;
 
+import com.team20.fitmate.domain.cheer.dto.CheerRecordCommand;
+import com.team20.fitmate.domain.cheer.service.CheerRecorder;
 import com.team20.fitmate.domain.participant.dto.ParticipantCreateRequest;
 import com.team20.fitmate.domain.participant.dto.ParticipantCreateResponse;
 import com.team20.fitmate.domain.participant.service.ParticipantService;
@@ -12,6 +14,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -27,6 +32,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -40,6 +46,7 @@ import static org.awaitility.Awaitility.await;
  * 참가자 발급과 REST 입장은 서비스로 미리 해 둔다.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@Import(RoomWebSocketHandlerIntegrationTest.RecordingCheerRecorder.class)
 class RoomWebSocketHandlerIntegrationTest {
 
     private static final JsonMapper MAPPER = JsonMapper.builder().build();
@@ -63,6 +70,7 @@ class RoomWebSocketHandlerIntegrationTest {
     @BeforeEach
     void setUp() {
         roomId = roomService.getAll().getFirst().roomId();
+        RecordingCheerRecorder.RECORDED.clear();
     }
 
     @AfterEach
@@ -357,6 +365,128 @@ class RoomWebSocketHandlerIntegrationTest {
         client.send("{\"type\":\"PING\"}");
         assertThat(client.next().path("type").asString()).as("정상 POSE에는 오류가 오지 않는다").isEqualTo("PONG");
         assertThat(client.isOpen()).isTrue();
+    }
+
+    // ===== 응원(CHEER) — 이슈 #6 =====
+
+    private static String cheer(Long targetParticipantId, String reaction) {
+        return "{\"type\":\"CHEER\",\"payload\":{\"targetParticipantId\":" + targetParticipantId
+                + ",\"reaction\":\"" + reaction + "\"}}";
+    }
+
+    /** 세 명을 입장시키고 입장 알림을 모두 읽어 둔다 */
+    private List<TestClient> threeJoined(ParticipantCreateResponse a, ParticipantCreateResponse b, ParticipantCreateResponse c)
+            throws Exception {
+        TestClient first = joinedClient(a);
+        TestClient second = joinedClient(b);
+        first.next(); // b 입장
+        TestClient third = joinedClient(c);
+        first.next(); // c 입장
+        second.next(); // c 입장
+        return List.of(first, second, third);
+    }
+
+    @Test
+    @DisplayName("A가 B에게 보낸 응원은 B만 받고 C는 받지 않으며, A는 CHEER_SENT로 대상을 확인하고 저장으로 넘어간다")
+    void cheerOnlyToTarget() throws Exception {
+        ParticipantCreateResponse a = enteredParticipant("주영");
+        ParticipantCreateResponse b = enteredParticipant("지수");
+        ParticipantCreateResponse c = enteredParticipant("민호");
+        List<TestClient> joined = threeJoined(a, b, c);
+
+        joined.get(0).send(cheer(b.participantId(), "FIRE"));
+
+        JsonNode received = joined.get(1).next();
+        assertThat(received.path("type").asString()).isEqualTo("CHEER_RECEIVED");
+        assertThat(received.path("participantId").asLong()).isEqualTo(a.participantId());
+        assertThat(received.path("payload").path("reaction").asString()).isEqualTo("FIRE");
+
+        JsonNode sent = joined.get(0).next();
+        assertThat(sent.path("type").asString()).isEqualTo("CHEER_SENT");
+        assertThat(sent.path("payload").path("targetParticipantId").asLong()).isEqualTo(b.participantId());
+
+        joined.get(2).send("{\"type\":\"PING\"}");
+        assertThat(joined.get(2).next().path("type").asString())
+                .as("C가 다음으로 받는 것은 응원이 아니라 PING 응답이어야 한다").isEqualTo("PONG");
+
+        await().atMost(WAIT_SECONDS, TimeUnit.SECONDS).until(() -> !RecordingCheerRecorder.RECORDED.isEmpty());
+        CheerRecordCommand saved = RecordingCheerRecorder.RECORDED.getFirst();
+        assertThat(saved.roomId()).isEqualTo(roomId);
+        assertThat(saved.senderId()).isEqualTo(a.participantId());
+        assertThat(saved.receiverId()).isEqualTo(b.participantId());
+        assertThat(saved.reaction()).isEqualTo("FIRE");
+        assertThat(saved.occurredAt().toString()).isEqualTo(received.path("sentAt").asString());
+    }
+
+    @Test
+    @DisplayName("퇴장한 친구에게 응원하면 CHEER_TARGET_UNAVAILABLE을 받고 연결은 유지되며 저장하지 않는다")
+    void cheerToLeftTarget() throws Exception {
+        ParticipantCreateResponse a = enteredParticipant("주영");
+        ParticipantCreateResponse b = enteredParticipant("지수");
+        TestClient first = joinedClient(a);
+        TestClient second = joinedClient(b);
+        first.next(); // b 입장
+        second.send("{\"type\":\"LEAVE\"}");
+        assertThat(first.next().path("type").asString()).isEqualTo("PARTICIPANT_LEFT");
+
+        first.send(cheer(b.participantId(), "FIRE"));
+
+        JsonNode error = first.next();
+        assertThat(error.path("payload").path("code").asString()).isEqualTo("CHEER_TARGET_UNAVAILABLE");
+        assertThat(error.path("payload").path("closed").asBoolean()).isFalse();
+        assertThat(first.isOpen()).isTrue();
+        assertThat(RecordingCheerRecorder.RECORDED).isEmpty();
+    }
+
+    @Test
+    @DisplayName("리액션 코드 형식이 틀리면 INVALID_MESSAGE를 받고 연결은 유지된다")
+    void invalidCheer() throws Exception {
+        ParticipantCreateResponse a = enteredParticipant("주영");
+        TestClient client = joinedClient(a);
+
+        client.send(cheer(99L, "fire"));
+        assertThat(client.next().path("payload").path("code").asString()).isEqualTo("INVALID_MESSAGE");
+        client.send("{\"type\":\"CHEER\",\"payload\":{\"reaction\":\"FIRE\"}}");
+        assertThat(client.next().path("payload").path("code").asString()).isEqualTo("INVALID_MESSAGE");
+        assertThat(client.isOpen()).isTrue();
+    }
+
+    @Test
+    @DisplayName("저장이 실패해도 응원은 전달되고 보낸 사람에게 오류가 가지 않는다")
+    void cheerDeliveredEvenIfRecordFails() throws Exception {
+        ParticipantCreateResponse a = enteredParticipant("주영");
+        ParticipantCreateResponse b = enteredParticipant("지수");
+        TestClient first = joinedClient(a);
+        TestClient second = joinedClient(b);
+        first.next(); // b 입장
+
+        first.send(cheer(b.participantId(), RecordingCheerRecorder.FAILING_REACTION));
+
+        assertThat(second.next().path("type").asString()).isEqualTo("CHEER_RECEIVED");
+        assertThat(first.next().path("type").asString()).isEqualTo("CHEER_SENT");
+        first.send("{\"type\":\"PING\"}");
+        assertThat(first.next().path("type").asString()).as("오류 없이 다음 응답이 와야 한다").isEqualTo("PONG");
+    }
+
+    /**
+     * 테스트용 응원 저장 구현체. 데이터 담당의 실제 구현 대신 넘어온 응원을 모아 둔다.
+     * 리액션이 {@link #FAILING_REACTION}이면 저장 실패를 흉내 내 예외를 던진다.
+     */
+    @TestConfiguration
+    static class RecordingCheerRecorder {
+
+        static final List<CheerRecordCommand> RECORDED = new CopyOnWriteArrayList<>();
+        static final String FAILING_REACTION = "SAVE_FAIL";
+
+        @Bean
+        CheerRecorder recordingCheerRecorder() {
+            return command -> {
+                if (FAILING_REACTION.equals(command.reaction())) {
+                    throw new IllegalStateException("저장 실패 테스트");
+                }
+                RECORDED.add(command);
+            };
+        }
     }
 
     /**
