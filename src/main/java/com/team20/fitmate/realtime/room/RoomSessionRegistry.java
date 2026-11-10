@@ -1,5 +1,6 @@
 package com.team20.fitmate.realtime.room;
 
+import com.team20.fitmate.domain.cheer.dto.CheerRecordCommand;
 import com.team20.fitmate.realtime.message.CheerPayload;
 import com.team20.fitmate.realtime.message.ConnectionPayload;
 import com.team20.fitmate.realtime.message.ErrorPayload;
@@ -27,6 +28,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * 운동방별 참가자 상태와 연결을 메모리에서 관리하고, 같은 방에 이벤트를 전달한다.
@@ -227,35 +229,42 @@ public class RoomSessionRegistry {
      *     <li>같은 대상에게 {@code realtime.cheer-cooldown} 안에 다시 보내면 연타로 보고 오류 없이 무시한다</li>
      * </ul>
      * 대상이 없어 실패한 응원은 연타 제한 시간에 넣지 않는다.
+     * <p>
+     * DB 저장은 여기서 하지 않는다(잠금 안에서 DB를 기다리지 않게). 전달에 성공하면 저장할 내용을 돌려주고,
+     * 호출한 쪽이 잠금 밖에서 {@code cheer} 도메인으로 넘긴다.
+     *
+     * @return 대상에게 전달했으면 저장할 응원, 전달하지 않았으면(실패·연타) 비어 있음
      */
-    public void cheer(String sessionId, CheerPayload cheer) {
+    public Optional<CheerRecordCommand> cheer(String sessionId, CheerPayload cheer) {
         synchronized (lock) {
             Connection connection = connections.get(sessionId);
             if (connection == null) {
-                return;
+                return Optional.empty();
             }
             Instant now = clock.instant();
             connection.lastSeenAt = now;
             if (!connection.isJoined()) {
                 sendError(connection, RealtimeErrorCode.JOIN_REQUIRED);
-                return;
+                return Optional.empty();
             }
             if (cheer.targetParticipantId().equals(connection.participantId)) {
                 sendError(connection, RealtimeErrorCode.INVALID_MESSAGE);
-                return;
+                return Optional.empty();
             }
             RoomState room = rooms.get(connection.roomId);
             Connection target = connectedConnectionOf(room, cheer.targetParticipantId());
             if (target == null) {
                 sendError(connection, RealtimeErrorCode.CHEER_TARGET_UNAVAILABLE);
-                return;
+                return Optional.empty();
             }
             RoomPresence sender = room.presences.get(connection.participantId);
             if (!sender.tryAcquireCheerSlot(cheer.targetParticipantId(), now, properties.cheerCooldown())) {
-                return;
+                return Optional.empty();
             }
             send(target, message(ServerMessageType.CHEER_RECEIVED, room.roomId, connection.participantId, now, cheer));
             send(connection, message(ServerMessageType.CHEER_SENT, room.roomId, connection.participantId, now, cheer));
+            return Optional.of(new CheerRecordCommand(
+                    room.roomId, connection.participantId, cheer.targetParticipantId(), cheer.reaction(), now));
         }
     }
 
