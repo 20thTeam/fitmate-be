@@ -1,6 +1,7 @@
 package com.team20.fitmate.domain.admin.controller;
 
 import com.team20.fitmate.domain.admin.dto.AdminParticipantResponse;
+import com.team20.fitmate.domain.admin.dto.AdminResetResponse;
 import com.team20.fitmate.domain.admin.dto.AdminRoomResponse;
 import com.team20.fitmate.domain.admin.dto.AdminWorkoutResponse;
 import com.team20.fitmate.domain.admin.service.AdminService;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -21,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * 운영 API. 시연 운영 화면(/admin)이 방 접속자와 전체 참가자·운동 기록을 보는 데 쓴다.
+ * 운영 API. 시연 운영 화면(/admin)이 방 접속자와 전체 참가자·운동 기록을 보고, 리허설 뒤 데이터를 정리하는 데 쓴다.
  * <p>
  * 모든 요청에 운영 키 헤더({@code X-Admin-Key})가 필요하다. 확인은 {@code AdminKeyInterceptor}가 한다.
  */
@@ -82,5 +84,22 @@ public class AdminController {
             @Parameter(description = "이 참가자 기록만 본다. 없으면 전체. 없는 참가자면 빈 목록")
             @RequestParam(name = "participantId", required = false) Long participantId) {
         return RsData.ok("운동 기록을 조회했습니다.", adminService.getWorkouts(participantId));
+    }
+
+    /**
+     * 시연 데이터를 초기화한다. 되돌릴 수 없다.
+     */
+    @Operation(summary = "시연 데이터 초기화",
+            description = "참가자·루틴·운동 기록·수행 기록·응원·팀 경험치 적립 기록을 지우고 팀 경험치를 0으로 되돌린다. "
+                    + "운동방·팀·운동 목록은 남긴다. 지금 열린 실시간 연결(/ws)도 모두 닫는다. 되돌릴 수 없다. "
+                    + "초기화 뒤 기존 토큰으로 GET /api/participants/me를 부르면 404-2다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "200-1 초기화 성공"),
+            @ApiResponse(responseCode = "401", description = "401-1 운영 키 누락 또는 불일치"),
+            @ApiResponse(responseCode = "403", description = "403-1 서버에 운영 키가 설정되지 않음")
+    })
+    @PostMapping("/reset")
+    public RsData<AdminResetResponse> reset() {
+        return RsData.ok("시연 데이터를 초기화했습니다.", adminService.reset());
     }
 }
