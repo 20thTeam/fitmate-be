@@ -133,14 +133,19 @@ public class RoomSessionRegistry {
             RoomPresence presence = new RoomPresence(ticket, sessionId);
             room.presences.put(presence.getParticipantId(), presence);
             connection.bind(room.roomId, presence.getParticipantId());
-            sendSnapshot(connection, room, now);
+            sendSnapshot(connection, room, now, false);
             broadcastExcept(room, presence.getParticipantId(),
                     message(ServerMessageType.PARTICIPANT_JOINED, room.roomId, presence.getParticipantId(), now, presence.toView()));
         }
     }
 
     /**
-     * 이미 방에 있는 참가자가 새 연결로 다시 들어온 경우를 처리한다.
+     * 이미 방에 있는 참가자가 새 연결로 다시 들어온 경우를 처리한다(이슈 #7 재접속).
+     * <ul>
+     *     <li>진행 상태·현재 운동은 끊기기 전 마지막 값 그대로 둔다. 끊긴 동안의 상태·동작 정보는 만들어 넣지 않는다.</li>
+     *     <li>본인에게 {@code reconnected=true}인 ROOM_SNAPSHOT을 보내 복원된 입장임을 알린다.</li>
+     *     <li>예전 연결이 아직 열려 있으면(다른 창) 먼저 닫고 지운다. 그 연결로 늦게 온 메시지는 더 이상 전달되지 않는다.</li>
+     * </ul>
      */
     private void rejoin(RoomState room, RoomPresence presence, Connection connection, Instant now) {
         boolean wasUnstable = presence.getConnectionStatus() == ConnectionStatus.UNSTABLE;
@@ -153,7 +158,7 @@ public class RoomSessionRegistry {
         }
         presence.reconnect(connection.session.getId());
         connection.bind(room.roomId, presence.getParticipantId());
-        sendSnapshot(connection, room, now);
+        sendSnapshot(connection, room, now, true);
         if (wasUnstable) {
             broadcastExcept(room, presence.getParticipantId(),
                     message(ServerMessageType.CONNECTION_STATUS, room.roomId, presence.getParticipantId(), now,
@@ -427,10 +432,14 @@ public class RoomSessionRegistry {
         return connections.get(presence.getSessionId());
     }
 
-    /** 본인에게 방 전체 상태를 보낸다 */
-    private void sendSnapshot(Connection connection, RoomState room, Instant now) {
+    /**
+     * 본인에게 방 전체 상태를 보낸다.
+     *
+     * @param reconnected 이미 있던 자리로 돌아온 입장(재접속·새 창)이면 true
+     */
+    private void sendSnapshot(Connection connection, RoomState room, Instant now, boolean reconnected) {
         send(connection, message(ServerMessageType.ROOM_SNAPSHOT, room.roomId, connection.participantId, now,
-                new RoomSnapshotPayload(room.capacity, room.views())));
+                new RoomSnapshotPayload(room.capacity, room.views(), reconnected)));
     }
 
     /** 같은 방에서 지금 연결된 다른 참가자 모두에게 보낸다 */

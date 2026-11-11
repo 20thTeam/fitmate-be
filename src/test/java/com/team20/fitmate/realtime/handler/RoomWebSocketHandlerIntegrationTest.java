@@ -189,6 +189,87 @@ class RoomWebSocketHandlerIntegrationTest {
     }
 
     @Test
+    @DisplayName("승인되지 않은 진행 상태(일시정지 등)와 휴식 초 같은 정의 안 된 값은 받지 않는다 (이슈 #7)")
+    void unapprovedProgressStatusRejected() throws Exception {
+        ParticipantCreateResponse juyoung = enteredParticipant("주영");
+        ParticipantCreateResponse jisu = enteredParticipant("지수");
+        TestClient first = joinedClient(juyoung);
+        TestClient second = joinedClient(jisu);
+        first.next(); // 지수 입장 알림
+
+        first.send("{\"type\":\"STATUS\",\"payload\":{\"progressStatus\":\"PAUSED\"}}");
+        assertThat(first.next().path("payload").path("code").asString()).isEqualTo("INVALID_MESSAGE");
+
+        // 정의되지 않은 휴식 초 필드는 친구에게 전달되지 않는다
+        first.send("{\"type\":\"STATUS\",\"payload\":{\"progressStatus\":\"RESTING\",\"restSeconds\":30}}");
+        JsonNode relayed = second.next();
+        assertThat(relayed.path("type").asString()).isEqualTo("PARTICIPANT_STATUS");
+        assertThat(relayed.path("payload").path("progressStatus").asString()).isEqualTo("RESTING");
+        assertThat(relayed.path("payload").has("restSeconds")).isFalse();
+        assertThat(registry.participants(roomId))
+                .filteredOn(view -> view.participantId().equals(juyoung.participantId()))
+                .extracting(view -> view.progressStatus().name())
+                .containsExactly("RESTING");
+    }
+
+    @Test
+    @DisplayName("끊긴 뒤 같은 토큰으로 다시 들어오면 reconnected=true 스냅샷으로 끊기기 전 상태를 돌려받는다 (이슈 #7)")
+    void reconnectSnapshotRestoresStatus() throws Exception {
+        ParticipantCreateResponse juyoung = enteredParticipant("주영");
+        TestClient first = connect(null);
+        first.send(join(juyoung.clientToken(), roomId));
+        assertThat(first.next().path("payload").path("reconnected").asBoolean()).isFalse();
+        first.send("{\"type\":\"STATUS\",\"payload\":{\"exerciseId\":3,\"exerciseName\":\"스쿼트\",\"progressStatus\":\"EXERCISING\"}}");
+        await().atMost(WAIT_SECONDS, TimeUnit.SECONDS).until(() -> registry.participants(roomId).getFirst().exerciseId() != null);
+
+        first.abort();
+        await().atMost(WAIT_SECONDS, TimeUnit.SECONDS)
+                .until(() -> registry.participants(roomId).getFirst().connectionStatus() == ConnectionStatus.UNSTABLE);
+
+        TestClient again = connect(null);
+        again.send(join(juyoung.clientToken(), roomId));
+        JsonNode snapshot = again.next();
+
+        assertThat(snapshot.path("type").asString()).isEqualTo("ROOM_SNAPSHOT");
+        assertThat(snapshot.path("payload").path("reconnected").asBoolean()).isTrue();
+        JsonNode me = snapshot.path("payload").path("participants").get(0);
+        assertThat(me.path("exerciseId").asLong()).isEqualTo(3);
+        assertThat(me.path("progressStatus").asString()).isEqualTo("EXERCISING");
+        assertThat(me.path("connectionStatus").asString()).isEqualTo("CONNECTED");
+    }
+
+    @Test
+    @DisplayName("1회차를 끝낸 참가자가 REST로 같은 방에 다시 입장하고 새 연결로 JOIN해 2회차 운동을 보내면 친구 화면이 새 운동으로 바뀐다 (이슈 #9)")
+    void secondRoundReentry() throws Exception {
+        ParticipantCreateResponse juyoung = enteredParticipant("주영");
+        ParticipantCreateResponse jisu = enteredParticipant("지수");
+        TestClient round1 = joinedClient(juyoung);
+        TestClient friend = joinedClient(jisu);
+        round1.next(); // 지수 입장 알림
+
+        round1.send("{\"type\":\"STATUS\",\"payload\":{\"exerciseId\":12,\"exerciseName\":\"플랭크\",\"progressStatus\":\"FINISHED\"}}");
+        assertThat(friend.next().path("payload").path("progressStatus").asString()).isEqualTo("FINISHED");
+        round1.send("{\"type\":\"LEAVE\"}");
+        assertThat(friend.next().path("type").asString()).isEqualTo("PARTICIPANT_LEFT");
+
+        // 2회차 입장: REST 입장을 다시 해도 성공하고, 실시간 JOIN은 처음 입장처럼 대기 상태로 시작한다
+        roomService.enter(juyoung.clientToken(), roomId);
+        TestClient round2 = connect(null);
+        round2.send(join(juyoung.clientToken(), roomId));
+        JsonNode snapshot = round2.next();
+        assertThat(snapshot.path("payload").path("reconnected").asBoolean()).isFalse();
+        assertThat(friend.next().path("type").asString()).isEqualTo("PARTICIPANT_JOINED");
+
+        round2.send("{\"type\":\"STATUS\",\"payload\":{\"exerciseId\":21,\"exerciseName\":\"스쿼트\",\"progressStatus\":\"EXERCISING\"}}");
+
+        JsonNode relayed = friend.next();
+        assertThat(relayed.path("type").asString()).isEqualTo("PARTICIPANT_STATUS");
+        assertThat(relayed.path("participantId").asLong()).isEqualTo(juyoung.participantId());
+        assertThat(relayed.path("payload").path("exerciseId").asLong()).isEqualTo(21);
+        assertThat(relayed.path("payload").path("progressStatus").asString()).isEqualTo("EXERCISING");
+    }
+
+    @Test
     @DisplayName("JOIN 전에 STATUS를 보내면 JOIN_REQUIRED를 받는다")
     void joinRequired() throws Exception {
         TestClient client = connect(null);
