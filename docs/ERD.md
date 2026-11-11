@@ -114,8 +114,9 @@ erDiagram
         id room_id FK
         id sender_id FK "보낸 사람"
         id receiver_id FK "받은 사람"
-        string reaction "리액션"
-        datetime created_at "이벤트 시각"
+        string reaction "리액션 코드, 30자 이하"
+        datetime occurred_at "전달 시각(UTC)"
+        datetime created_at "저장 시각"
     }
 ```
 
@@ -132,7 +133,7 @@ erDiagram
 | `WORKOUT` | 7.1, 8.1, 8.3, 9.1, 10.1 | 한 회차 수행 단위. 이 ID로 경험치 중복을 막는다. 성장 기록(8.3)은 별도 테이블 없이 이 테이블과 `EXERCISE_RECORD`, `ROUTINE`을 참가자 기준으로 모아 조회한다 |
 | `EXERCISE_RECORD` | 3.2, 8.1 | 운동별 수행 기록. 플랭크는 `actual_seconds`로 기록한다. 제출 형식은 [수행기록_형식.md](수행기록_형식.md). `(workout_id, routine_exercise_id)` 유니크 |
 | `TEAM_XP_LOG` | 9.1 | `workout_id` 유니크로 중복 적립을 DB에서 막는다. 산식은 PM 확정 해커톤 MVP 산식(`MvpXpCalculator`). 팀 레벨은 저장하지 않고 `TEAM.total_xp`로 계산한다(Lv.1 0~99, Lv.2 100~299, Lv.3 300~549, Lv.4 550~849, Lv.5 850 이상) |
-| `CHEER` | 6.1 | 응원 이벤트 기록 |
+| `CHEER` | 6.1 | 전달에 성공한 응원 기록. 보낸 사람과 받은 사람이 모두 그 운동방에 있어야 저장한다(자기 자신 불가) |
 | `PUBLIC_PARTY` | 2.4, 10.1 | **제안.** 공개 선셋 파티(P1). 오픈·종료 시각은 설정값이며 정원이 없다. 친구 파티 `ROOM`과 섞지 않는다 |
 
 ## DB에 저장하지 않는 값 (제안)
