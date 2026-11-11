@@ -28,6 +28,9 @@ public enum ErrorCode {
     /** 수행 기록 값이 측정 상태·측정 방식 규칙에 맞지 않음 (예: 미측정인데 유효 횟수가 있음) */
     INVALID_EXERCISE_RECORD(HttpStatus.BAD_REQUEST, "400-4", "수행 기록 값이 올바르지 않습니다."),
 
+    /** 응원 값이 올바르지 않음 (다른 운동방 참가자, 자기 자신, 빈 리액션 등) */
+    INVALID_CHEER(HttpStatus.BAD_REQUEST, "400-5", "같은 운동방 친구에게만 응원할 수 있습니다."),
+
     /** 존재하지 않는 주소로 요청 */
     NOT_FOUND(HttpStatus.NOT_FOUND, "404-1", "요청한 경로를 찾을 수 없습니다."),
 
