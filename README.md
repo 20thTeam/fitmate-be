@@ -66,14 +66,14 @@ com.team20.fitmate
 │   └── exception                   # CustomException, ErrorCode, GlobalExceptionHandler
 │
 ├── domain
+│   ├── admin                       # 운영 화면(/admin) API · 운영 키(X-Admin-Key) 인증 [#31]
 │   ├── participant                 # 참가자 · 임시 식별 · 닉네임 · 캐릭터     [슬라이스 2]
 │   ├── room                        # 운동방 · 팀                              [슬라이스 2, 8]
 │   ├── exercise                    # 운동 목록 · 측정 방식 · 가이드 참조      [슬라이스 1, 5]
 │   ├── routine                     # 루틴 · 첫 회차 추천 · 2회차 추천           [슬라이스 1, 9]
 │   ├── workout                     # 운동 기록 · 수행 기록 · 결과 조회          [슬라이스 7, 8]
 │   ├── teamxp                      # 팀 경험치 적립 · 중복 방지                 [슬라이스 8]
-│   ├── cheer                       # 응원 이벤트 저장                          [슬라이스 6]
-│   └── admin                       # 운영 화면(/admin) API · 운영 키(X-Admin-Key) 인증 [#31]
+│   └── cheer                       # 응원 이벤트 저장                          [슬라이스 6]
 │
 └── realtime                        # 운동방 실시간 공유 — 해석하지 않고 전달만 한다
     ├── handler                     # WebSocket 연결 · 메시지 수신
