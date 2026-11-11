@@ -16,7 +16,7 @@ erDiagram
     PUBLIC_PARTY ||--o{ WORKOUT : "공개 파티 진행, 제안"
     WORKOUT ||--o{ EXERCISE_RECORD : "운동별 기록"
     ROUTINE_EXERCISE ||--o| EXERCISE_RECORD : "목표 대비"
-    WORKOUT |o--o{ ROUTINE : "다음 회차 근거"
+    WORKOUT |o--o| ROUTINE : "다음 회차 근거"
     WORKOUT ||--o| TEAM_XP_LOG : "적립"
     TEAM ||--o{ TEAM_XP_LOG : "누적"
     PARTICIPANT ||--o{ TEAM_XP_LOG : "기여"
@@ -55,9 +55,9 @@ erDiagram
         id participant_id FK
         int round_no "회차"
         string goal "목표 4종"
-        id based_on_workout_id FK "NULL이면 첫 회차"
-        string adjustment_type "UP, KEEP, UNAVAILABLE, 제안"
-        string adjustment_reason "조정 사유"
+        id based_on_workout_id FK "NULL이면 첫 회차, 유니크(기록 하나에 추천 하나)"
+        string adjustment_type "UP, KEEP, UNAVAILABLE. 첫 회차는 NULL"
+        string adjustment_reason "운동별 조정 사유, 줄바꿈 구분"
         string status "READY, FAILED, 제안"
         datetime created_at
     }
@@ -128,7 +128,7 @@ erDiagram
 | `ROOM` | 2.1, 4.1 | 시연에서는 미리 넣어 둔 한 행을 쓴다 |
 | `PARTICIPANT` | 2.2 | 닉네임은 유니크가 아니다. 같은 이름이어도 기록을 혼동하지 않아야 한다 |
 | `EXERCISE` | 1.2, 3.2, 5.1 | 운동 목록이 미정이라 행은 나중에 넣는다 |
-| `ROUTINE` | 1.2, 8.2 | 첫 회차와 2회차를 같은 구조로 저장한다 |
+| `ROUTINE` | 1.2, 8.2 | 첫 회차와 2회차를 같은 구조로 저장한다. 2회차 이상은 운동 구성·순서·세트가 이전 회차와 같고 수행량만 바뀐다. 판정 기준·증가 폭은 시연용 임시값(프론트 임시 규칙과 같음)이며 AI·PM 확정 전이다 |
 | `ROUTINE_EXERCISE` | 1.2, 1.3 | 횟수형과 시간형 중 하나만 채운다 |
 | `WORKOUT` | 7.1, 8.1, 8.3, 9.1, 10.1 | 한 회차 수행 단위. 이 ID로 경험치 중복을 막는다. 성장 기록(8.3)은 별도 테이블 없이 이 테이블과 `EXERCISE_RECORD`, `ROUTINE`을 참가자 기준으로 모아 조회한다 |
 | `EXERCISE_RECORD` | 3.2, 8.1 | 운동별 수행 기록. 플랭크는 `actual_seconds`로 기록한다. 제출 형식은 [수행기록_형식.md](수행기록_형식.md). `(workout_id, routine_exercise_id)` 유니크 |
