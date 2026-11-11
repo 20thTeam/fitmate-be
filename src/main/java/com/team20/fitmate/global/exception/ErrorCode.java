@@ -40,6 +40,14 @@ public enum ErrorCode {
     /** 처리하지 못한 서버 내부 오류. 내부 메시지는 응답에 노출하지 않는다 */
     INTERNAL_SERVER_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "500-1", "서버 오류가 발생했습니다."),
 
+    // ===== 운영 API =====
+
+    /** 운영 키(X-Admin-Key)가 없거나 서버 설정값과 다름 */
+    ADMIN_KEY_INVALID(HttpStatus.UNAUTHORIZED, "401-1", "운영 키가 올바르지 않습니다."),
+
+    /** 서버에 운영 키가 설정되지 않아 운영 API를 쓸 수 없음 */
+    ADMIN_DISABLED(HttpStatus.FORBIDDEN, "403-1", "운영 API가 꺼져 있습니다. 서버에 운영 키를 설정해야 합니다."),
+
     // ===== 참가자 =====
 
     /** 재방문 토큰에 해당하는 참가자가 없음 */
