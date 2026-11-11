@@ -11,6 +11,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 서버 시작 때 운동 초기 데이터를 넣는다. 이미 있는 코드는 건너뛰므로 여러 번 실행해도 안전하다.
@@ -38,9 +41,11 @@ public class ExerciseDataInitializer implements ApplicationRunner {
     );
 
     private final ExerciseRepository exerciseRepository;
+    private final ExerciseGuideProperties guideProperties;
 
     /**
-     * 아직 없는 운동만 저장한다.
+     * 아직 없는 운동만 저장하고, 모든 운동의 가이드 시범 참조를 설정값과 맞춘다.
+     * 설정에서 빠진 운동은 시범 없음(null)으로 되돌린다.
      */
     @Override
     @Transactional
@@ -51,6 +56,21 @@ public class ExerciseDataInitializer implements ApplicationRunner {
                 .toList();
         exerciseRepository.saveAll(missing);
         log.info("운동 초기 데이터 {}건 적재", missing.size());
+        applyGuideMotions();
+    }
+
+    /**
+     * 설정값의 가이드 시범 참조를 운동에 반영한다. 없는 운동 코드는 경고만 남긴다.
+     */
+    private void applyGuideMotions() {
+        Map<String, String> motions = guideProperties.motions();
+        List<Exercise> exercises = exerciseRepository.findAll();
+        exercises.forEach(exercise -> exercise.changeGuideMotionRef(motions.get(exercise.getCode())));
+        Set<String> knownCodes = exercises.stream().map(Exercise::getCode).collect(Collectors.toSet());
+        motions.keySet().stream()
+                .filter(code -> !knownCodes.contains(code))
+                .forEach(code -> log.warn("가이드 시범 설정에 없는 운동 코드: {}", code));
+        log.info("가이드 시범 참조 {}건 반영", exercises.stream().filter(Exercise::hasGuideMotion).count());
     }
 
     /**

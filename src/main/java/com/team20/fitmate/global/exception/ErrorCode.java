@@ -65,6 +65,11 @@ public enum ErrorCode {
     /** 팀이 없음 */
     TEAM_NOT_FOUND(HttpStatus.NOT_FOUND, "404-6", "팀을 찾을 수 없습니다."),
 
+    // ===== 운동 =====
+
+    /** 운동 코드에 해당하는 운동이 없음 */
+    EXERCISE_NOT_FOUND(HttpStatus.NOT_FOUND, "404-7", "운동을 찾을 수 없습니다."),
+
     // ===== 운동 기록 (충돌) =====
 
     /** 이미 종료된 운동 기록에 다시 제출함 */
