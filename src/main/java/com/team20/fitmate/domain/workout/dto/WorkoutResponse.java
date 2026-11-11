@@ -2,6 +2,7 @@ package com.team20.fitmate.domain.workout.dto;
 
 import com.team20.fitmate.domain.workout.entity.ExerciseRecord;
 import com.team20.fitmate.domain.workout.entity.Workout;
+import com.team20.fitmate.domain.workout.entity.WorkoutKind;
 import com.team20.fitmate.domain.workout.entity.WorkoutStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -12,7 +13,8 @@ import java.util.List;
  * 운동 기록 응답.
  *
  * @param workoutId  운동 기록 식별값
- * @param routineId  수행한 루틴 식별값
+ * @param kind       운동 종류 (루틴 운동, 공개 파티)
+ * @param routineId  수행한 루틴 식별값. 공개 파티면 null
  * @param roomId     운동한 운동방 식별값. 입장 전이면 null
  * @param status     상태
  * @param startedAt  시작 시각
@@ -24,10 +26,13 @@ public record WorkoutResponse(
         @Schema(description = "운동 기록 식별값", example = "1")
         Long workoutId,
 
-        @Schema(description = "수행한 루틴 식별값", example = "1", nullable = true)
+        @Schema(description = "운동 종류 (ROUTINE 루틴 운동, PUBLIC_PARTY 공개 파티)", example = "ROUTINE")
+        WorkoutKind kind,
+
+        @Schema(description = "수행한 루틴 식별값. 공개 파티면 null", example = "1", nullable = true)
         Long routineId,
 
-        @Schema(description = "운동한 운동방 식별값. 입장 전이면 null", example = "1", nullable = true)
+        @Schema(description = "운동한 운동방 식별값. 입장 전이거나 공개 파티면 null", example = "1", nullable = true)
         Long roomId,
 
         @Schema(description = "상태 (IN_PROGRESS 진행 중, FINISHED 종료)", example = "IN_PROGRESS")
@@ -49,6 +54,7 @@ public record WorkoutResponse(
     public static WorkoutResponse from(Workout workout, List<ExerciseRecord> records) {
         return new WorkoutResponse(
                 workout.getId(),
+                workout.getKind(),
                 workout.getRoutine() == null ? null : workout.getRoutine().getId(),
                 workout.getRoom() == null ? null : workout.getRoom().getId(),
                 workout.getStatus(),

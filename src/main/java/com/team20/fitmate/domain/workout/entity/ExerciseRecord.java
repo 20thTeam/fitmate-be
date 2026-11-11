@@ -119,6 +119,18 @@ public class ExerciseRecord extends BaseTimeEntity {
     }
 
     /**
+     * 루틴 없이 한 운동(공개 파티)의 수행 기록을 만든다. 규칙은 루틴 운동과 같다.
+     *
+     * @throws CustomException 값이 규칙에 맞지 않으면 {@link ErrorCode#INVALID_EXERCISE_RECORD}
+     */
+    public static ExerciseRecord withoutRoutine(Workout workout, Exercise exercise, Values values) {
+        validate(exercise.getMeasureType(), values);
+        return new ExerciseRecord(workout, null, exercise, values.measurementStatus(),
+                values.validCount(), values.belowStandardCount(), values.undeterminedCount(),
+                values.actualSeconds(), values.performedSets(), values.postureResult());
+    }
+
+    /**
      * 측정 상태별 규칙을 검사한다.
      * <ul>
      *     <li>음수는 받지 않는다.</li>

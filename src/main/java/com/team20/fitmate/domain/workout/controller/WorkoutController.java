@@ -67,7 +67,7 @@ public class WorkoutController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "200-1 수행 기록 확정"),
             @ApiResponse(responseCode = "400", description = "400-1 필수 값 누락·음수, 400-2 본문 오류, 400-3 토큰 헤더 누락, "
-                    + "400-4 루틴에 없는 운동·같은 운동 중복·측정 상태 규칙 위반"),
+                    + "400-4 루틴에 없는 운동·같은 운동 중복·측정 상태 규칙 위반·공개 파티 기록(공개 파티 종료 API 사용)"),
             @ApiResponse(responseCode = "404", description = "404-2 참가자 없음, 404-5 운동 기록 없음(다른 참가자의 기록 포함)"),
             @ApiResponse(responseCode = "409", description = "409-1 이미 종료된 운동 기록")
     })

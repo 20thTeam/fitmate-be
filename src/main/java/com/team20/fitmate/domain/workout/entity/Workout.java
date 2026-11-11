@@ -84,6 +84,13 @@ public class Workout extends BaseTimeEntity {
     }
 
     /**
+     * 공개 파티에서 루틴 없이 운동을 시작한다. 친구 운동방이 아니므로 운동방도 없다.
+     */
+    public static Workout startPublicParty(Participant participant, LocalDateTime startedAt) {
+        return new Workout(participant, null, null, startedAt);
+    }
+
+    /**
      * 운동을 종료한다. 수행 기록 확정은 서비스가 이 호출과 같은 트랜잭션에서 한다.
      *
      * @throws CustomException 이미 종료됐으면 {@link ErrorCode#WORKOUT_ALREADY_FINISHED}
@@ -101,6 +108,20 @@ public class Workout extends BaseTimeEntity {
      */
     public boolean isFinished() {
         return status == WorkoutStatus.FINISHED;
+    }
+
+    /**
+     * 운동 종류. 루틴 없이 시작한 기록은 공개 파티 운동이다.
+     */
+    public WorkoutKind getKind() {
+        return routine == null ? WorkoutKind.PUBLIC_PARTY : WorkoutKind.ROUTINE;
+    }
+
+    /**
+     * 공개 파티 운동 기록인지 확인한다.
+     */
+    public boolean isPublicParty() {
+        return getKind() == WorkoutKind.PUBLIC_PARTY;
     }
 
     /**
