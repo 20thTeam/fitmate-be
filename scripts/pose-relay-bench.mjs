@@ -9,6 +9,10 @@
 // 실행 (Node 22 이상, 추가 설치 없음):
 //   node scripts/pose-relay-bench.mjs --base http://localhost:8080 --clients 5 --hz 15 --seconds 30 --joints 13
 //
+// 공개 파티(이슈 #11) 다수 접속 부하 확인: --party 1 을 붙이면 친구 파티 운동방 대신 공개 파티에 JOIN한다.
+// REST 입장 없이 참가자만 만들고, 공개 파티가 열려 있어야 한다(서버를 PUBLIC_PARTY_OPEN_TIME 등으로 띄운다).
+//   node scripts/pose-relay-bench.mjs --party 1 --clients 30 --hz 15 --seconds 30 --joints 13
+//
 // 주의: 로컬 한 대에서 재면 네트워크 왕복이 거의 없다. 서버 처리 지연의 하한으로만 본다.
 //       실제 합격 수치는 배포 서버와 여러 PC로 다시 잰다.
 
@@ -27,6 +31,7 @@ const HZ = Number(args.hz ?? 15);
 const SECONDS = Number(args.seconds ?? 30);
 const JOINTS = Number(args.joints ?? 13);
 const WARMUP_SECONDS = 2; // 처음 2초는 JIT·연결 안정화 구간이라 통계에서 뺀다
+const PARTY = args.party !== undefined; // 공개 파티로 측정할지
 const WS_URL = BASE.replace(/^http/, 'ws') + '/ws';
 
 // ===== REST: 참가자 생성과 운동방 입장 =====
@@ -56,12 +61,13 @@ function poseMessage(sentAt) {
 }
 
 // ===== 클라이언트 하나 =====
-function connectClient(token, roomId, stats) {
+// target: 친구 파티면 { roomId }, 공개 파티면 { partyId }
+function connectClient(token, target, stats) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(WS_URL);
     const timer = setTimeout(() => reject(new Error('JOIN 응답 없음')), 10_000);
     ws.addEventListener('open', () => {
-      ws.send(JSON.stringify({ type: 'JOIN', payload: { token, roomId } }));
+      ws.send(JSON.stringify({ type: 'JOIN', payload: { token, ...target } }));
     });
     ws.addEventListener('message', (event) => {
       const message = JSON.parse(event.data);
@@ -89,8 +95,15 @@ function percentile(sorted, p) {
 }
 
 // ===== 실행 =====
-const rooms = await rest('/api/rooms');
-const roomId = rooms[0].roomId;
+let target;
+if (PARTY) {
+  const party = await rest('/api/public-parties/current');
+  if (party.status !== 'OPEN') throw new Error(`공개 파티가 닫혀 있다: ${JSON.stringify(party)}`);
+  target = { partyId: party.partyId };
+} else {
+  const rooms = await rest('/api/rooms');
+  target = { roomId: rooms[0].roomId };
+}
 const stats = { received: 0, latencies: [], errors: [], closes: [], measuring: false };
 
 const sockets = [];
@@ -99,12 +112,14 @@ for (let i = 0; i < CLIENTS; i++) {
     method: 'POST',
     body: { nickname: `측정${i + 1}`, characterCode: 'CHARACTER_01' },
   });
-  await rest(`/api/rooms/${roomId}/enter`, { method: 'POST', token: participant.clientToken });
-  sockets.push(await connectClient(participant.clientToken, roomId, stats));
+  if (!PARTY) {
+    await rest(`/api/rooms/${target.roomId}/enter`, { method: 'POST', token: participant.clientToken });
+  }
+  sockets.push(await connectClient(participant.clientToken, target, stats));
 }
 
 const sampleSize = Buffer.byteLength(poseMessage(performance.now()));
-console.log(`방 ${roomId}, 참가자 ${CLIENTS}명, ${HZ}Hz, ${SECONDS}초, 관절 ${JOINTS}개 (POSE 약 ${sampleSize}B)`);
+console.log(`${PARTY ? '공개 파티 ' + target.partyId : '방 ' + target.roomId}, 참가자 ${CLIENTS}명, ${HZ}Hz, ${SECONDS}초, 관절 ${JOINTS}개 (POSE 약 ${sampleSize}B)`);
 
 let sent = 0;
 const intervalMs = 1000 / HZ;
