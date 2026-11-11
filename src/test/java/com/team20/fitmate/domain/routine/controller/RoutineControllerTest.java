@@ -96,4 +96,64 @@ class RoutineControllerTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.resultCode").value("404-3"));
     }
+
+    /** 근력 강화 루틴으로 운동을 시작해 운동 기록 식별값을 돌려준다 */
+    private Integer startWorkout() throws Exception {
+        String routine = mockMvc.perform(post("/api/routines")
+                        .header(ParticipantController.TOKEN_HEADER, clientToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"goal\":\"STRENGTH\"}"))
+                .andReturn().getResponse().getContentAsString();
+        Integer routineId = JsonPath.read(routine, "$.data.routineId");
+        String workout = mockMvc.perform(post("/api/workouts")
+                        .header(ParticipantController.TOKEN_HEADER, clientToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"routineId\":" + routineId + "}"))
+                .andReturn().getResponse().getContentAsString();
+        return JsonPath.read(workout, "$.data.workoutId");
+    }
+
+    @Test
+    @DisplayName("종료된 운동 기록으로 다음 회차를 요청하면 200-1과 2회차 루틴·조정 유형·사유를 응답한다")
+    void createNextRound() throws Exception {
+        Integer workoutId = startWorkout();
+        mockMvc.perform(post("/api/workouts/{workoutId}/finish", workoutId)
+                        .header(ParticipantController.TOKEN_HEADER, clientToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"records\":[]}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/routines/next-round")
+                        .header(ParticipantController.TOKEN_HEADER, clientToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workoutId\":" + workoutId + "}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.resultCode").value("200-1"))
+                .andExpect(jsonPath("$.data.roundNo").value(2))
+                .andExpect(jsonPath("$.data.basedOnWorkoutId").value(workoutId))
+                .andExpect(jsonPath("$.data.previousRoutineId").isNumber())
+                .andExpect(jsonPath("$.data.adjustmentType").value("UNAVAILABLE"))
+                .andExpect(jsonPath("$.data.adjustmentReasons.length()").value(3))
+                .andExpect(jsonPath("$.data.exercises[0].targetCount").value(15));
+    }
+
+    @Test
+    @DisplayName("종료 전 운동 기록이면 409-3, workoutId가 없으면 400-1로 응답한다")
+    void createNextRoundInvalid() throws Exception {
+        Integer workoutId = startWorkout();
+
+        mockMvc.perform(post("/api/routines/next-round")
+                        .header(ParticipantController.TOKEN_HEADER, clientToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"workoutId\":" + workoutId + "}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.resultCode").value("409-3"));
+        mockMvc.perform(post("/api/routines/next-round")
+                        .header(ParticipantController.TOKEN_HEADER, clientToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.resultCode").value("400-1"))
+                .andExpect(jsonPath("$.data[0].field").value("workoutId"));
+    }
 }
