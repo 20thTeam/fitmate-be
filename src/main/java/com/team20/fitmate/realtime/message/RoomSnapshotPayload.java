@@ -7,6 +7,9 @@ import java.util.List;
  *
  * @param capacity     정원(동시 접속 인원)
  * @param participants 본인을 포함한 현재 참가자 목록(입장 순서). 연결 불안정인 참가자도 재접속 대기 중이면 포함한다
+ * @param reconnected  이미 방에 자리가 있던 참가자가 새 연결로 돌아온 것이면 true(재접속·새 창), 처음 입장이면 false.
+ *                     true면 목록 안의 본인 진행 상태는 끊기기 전 마지막 값을 그대로 복원한 것이다(이슈 #7).
+ *                     프론트는 이 값으로 "다시 연결됐어요" 안내를 띄우고, 본인의 현재 상태를 STATUS로 한 번 다시 보낸다
  */
-public record RoomSnapshotPayload(int capacity, List<ParticipantView> participants) {
+public record RoomSnapshotPayload(int capacity, List<ParticipantView> participants, boolean reconnected) {
 }
