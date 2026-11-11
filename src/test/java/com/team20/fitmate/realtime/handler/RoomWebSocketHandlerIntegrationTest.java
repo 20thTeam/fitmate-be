@@ -17,6 +17,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -478,7 +479,9 @@ class RoomWebSocketHandlerIntegrationTest {
         static final List<CheerRecordCommand> RECORDED = new CopyOnWriteArrayList<>();
         static final String FAILING_REACTION = "SAVE_FAIL";
 
+        /** 실제 구현체({@code CheerService})보다 이 빈을 먼저 쓰도록 {@code @Primary}로 둔다 */
         @Bean
+        @Primary
         CheerRecorder recordingCheerRecorder() {
             return command -> {
                 if (FAILING_REACTION.equals(command.reaction())) {
