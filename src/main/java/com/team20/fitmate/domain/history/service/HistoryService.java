@@ -34,6 +34,7 @@ import java.util.stream.Collectors;
  * 내 성장 기록 조회(기능 8.3). 별도 테이블 없이 종료된 운동 기록과 수행 기록, 루틴, 경험치 적립 기록을 모아 보여준다.
  * <p>
  * 토큰의 참가자 본인 기록만 읽는다. 진행 중인 기록은 확정 전이라 넣지 않는다.
+ * 루틴 없는 공개 파티 기록도 넣으며, 이때 회차·목표·변경 이유·다음 추천은 비어 있다.
  * 예시 수치를 만들지 않으며, 근거가 없는 합계는 0이 아니라 null로 둔다.
  */
 @Service
@@ -94,10 +95,11 @@ public class HistoryService {
         Routine routine = workout.getRoutine();
         return new HistoryWorkoutResponse(
                 workout.getId(),
-                routine.getId(),
-                routine.getRoundNo(),
-                routine.getGoal(),
-                routine.getGoal().getDisplayName(),
+                workout.getKind(),
+                routine == null ? null : routine.getId(),
+                routine == null ? null : routine.getRoundNo(),
+                routine == null ? null : routine.getGoal(),
+                routine == null ? null : routine.getGoal().getDisplayName(),
                 workout.getStartedAt(),
                 workout.getFinishedAt(),
                 Duration.between(workout.getStartedAt(), workout.getFinishedAt()).toSeconds(),
@@ -106,8 +108,8 @@ public class HistoryService {
                         .filter(record -> record.getMeasurementStatus() == MeasurementStatus.MEASURED)
                         .map(ExerciseRecord::getValidCount)
                         .toList()),
-                routine.getAdjustmentType(),
-                routine.getAdjustmentReasons(),
+                routine == null ? null : routine.getAdjustmentType(),
+                routine == null ? List.of() : routine.getAdjustmentReasons(),
                 earnedXp,
                 records.stream().map(ExerciseRecordResponse::from).toList(),
                 next == null ? null : NextRoutineSummary.from(next));

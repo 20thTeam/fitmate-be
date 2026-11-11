@@ -78,7 +78,7 @@ public class WorkoutService {
      *
      * @throws CustomException 운동 기록이 없거나 본인 것이 아니면 {@link ErrorCode#WORKOUT_NOT_FOUND},
      *                         이미 종료됐으면 {@link ErrorCode#WORKOUT_ALREADY_FINISHED},
-     *                         루틴에 없는 운동이거나 같은 운동을 두 번 보내거나 값이 규칙에 맞지 않으면
+     *                         공개 파티 기록이거나(공개 파티 종료 API로 보내야 함) 루틴에 없는 운동이거나 같은 운동을 두 번 보내거나 값이 규칙에 맞지 않으면
      *                         {@link ErrorCode#INVALID_EXERCISE_RECORD}
      */
     @Transactional
@@ -89,6 +89,9 @@ public class WorkoutService {
                 .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_NOT_FOUND));
         if (workout.isFinished()) {
             throw new CustomException(ErrorCode.WORKOUT_ALREADY_FINISHED);
+        }
+        if (workout.isPublicParty()) {
+            throw new CustomException(ErrorCode.INVALID_EXERCISE_RECORD);
         }
 
         List<ExerciseRecord> records = exerciseRecordRepository.saveAll(confirmRecords(workout, request.records()));

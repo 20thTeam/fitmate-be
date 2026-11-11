@@ -27,7 +27,7 @@ public record ExerciseRecordResponse(
         @Schema(description = "수행 기록 식별값", example = "1")
         Long recordId,
 
-        @Schema(description = "루틴 구성 운동 식별값", example = "1")
+        @Schema(description = "루틴 구성 운동 식별값. 공개 파티 기록은 null", example = "1", nullable = true)
         Long routineExerciseId,
 
         @Schema(description = "운동 코드", example = "SQUAT")
