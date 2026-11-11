@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * 운동 저장소.
@@ -20,4 +21,9 @@ public interface ExerciseRepository extends JpaRepository<Exercise, Long> {
      * 같은 코드의 운동이 이미 있는지 확인한다. 초기 데이터 중복 적재를 막는다.
      */
     boolean existsByCode(String code);
+
+    /**
+     * 코드로 운동을 찾는다.
+     */
+    Optional<Exercise> findByCode(String code);
 }

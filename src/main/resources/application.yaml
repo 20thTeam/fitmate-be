@@ -16,3 +16,9 @@ realtime:
   pose-max-bytes: 2048     # 동작 정보(POSE) 메시지 하나의 최대 크기(바이트). 넘으면 INVALID_MESSAGE
   pose-max-per-second: 15  # 참가자 한 명이 1초에 중계할 수 있는 동작 정보 수. 넘는 메시지는 버린다
   cheer-cooldown: 1s       # 같은 친구에게 응원을 다시 보낼 수 있을 때까지의 시간. 그 안의 응원은 연타로 보고 무시
+
+# 운동별 AI 가이드 시범 동작 참조 (이슈 #5). 3D 담당이 정하면 "운동 코드: 참조" 형식으로 적는다.
+# 적지 않은 운동은 시범 없음으로 응답하고, 다른 운동의 시범으로 대신하지 않는다.
+# 예) SQUAT: guide/squat.glb
+exercise-guide:
+  motions: {}

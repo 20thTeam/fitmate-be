@@ -43,7 +43,7 @@ public class Exercise extends BaseTimeEntity {
     @Column(name = "measure_type", nullable = false, length = 10)
     private MeasureType measureType;
 
-    /** AI 가이드 시범 동작 참조. 가이드 슬라이스(S5) 전까지 비어 있다 */
+    /** AI 가이드 시범 동작 참조 (3D 담당이 정한 값). 없으면 시범 없음이다. 설정값 {@code exercise-guide.motions}에서 채운다 */
     @Column(name = "guide_motion_ref")
     private String guideMotionRef;
 
@@ -63,5 +63,19 @@ public class Exercise extends BaseTimeEntity {
      */
     public static Exercise create(String code, String name, MeasureType measureType, boolean recognitionVerified) {
         return new Exercise(code, name, measureType, recognitionVerified);
+    }
+
+    /**
+     * 가이드 시범 동작 참조를 바꾼다. 빈 값이면 시범 없음(null)으로 둔다.
+     */
+    public void changeGuideMotionRef(String guideMotionRef) {
+        this.guideMotionRef = guideMotionRef == null || guideMotionRef.isBlank() ? null : guideMotionRef.strip();
+    }
+
+    /**
+     * 가이드 시범이 있는지 본다.
+     */
+    public boolean hasGuideMotion() {
+        return guideMotionRef != null;
     }
 }
