@@ -6,6 +6,8 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -26,4 +28,9 @@ public interface TeamXpLogRepository extends JpaRepository<TeamXpLog, Long> {
             + "where l.participant.id = :participantId and l.createdAt >= :from and l.createdAt < :to")
     int sumEarnedXpByParticipantBetween(@Param("participantId") Long participantId,
                                         @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
+
+    /**
+     * 여러 운동 기록의 경험치 적립 기록을 한 번에 찾는다(성장 기록용).
+     */
+    List<TeamXpLog> findByWorkoutIdIn(Collection<Long> workoutIds);
 }

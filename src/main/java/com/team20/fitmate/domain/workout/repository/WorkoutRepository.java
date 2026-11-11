@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -29,4 +30,12 @@ public interface WorkoutRepository extends JpaRepository<Workout, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select w from Workout w where w.id = :workoutId")
     Optional<Workout> findByIdForUpdate(@Param("workoutId") Long workoutId);
+
+    /**
+     * 참가자의 운동 기록을 상태로 골라 최근 종료 순으로 찾는다. 성장 기록에서 쓰며 루틴을 함께 읽는다.
+     */
+    @Query("select w from Workout w join fetch w.routine "
+            + "where w.participant.id = :participantId and w.status = :status "
+            + "order by w.finishedAt desc, w.id desc")
+    List<Workout> findHistory(@Param("participantId") Long participantId, @Param("status") WorkoutStatus status);
 }
