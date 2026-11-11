@@ -1,6 +1,7 @@
 package com.team20.fitmate.realtime.room;
 
 import com.team20.fitmate.domain.cheer.dto.CheerRecordCommand;
+import com.team20.fitmate.domain.party.service.PublicPartyOccupancy;
 import com.team20.fitmate.realtime.message.CheerPayload;
 import com.team20.fitmate.realtime.message.ConnectionPayload;
 import com.team20.fitmate.realtime.message.ErrorPayload;
@@ -39,13 +40,14 @@ import java.util.Optional;
  *     <li>다른 참가자의 상태로 내 진행 상태를 바꾸는 경로가 없다. 진행 상태는 본인 STATUS로만 바뀐다.</li>
  *     <li>연결이 끊기면 바로 퇴장시키지 않고 연결 불안정으로 표시한 뒤 재접속 대기 시간 동안 자리를 남긴다.</li>
  *     <li>정원은 DB가 아니라 이 레지스트리의 현재 참가자 수(연결 불안정 포함)로 판단한다.</li>
+ *     <li>친구 파티 운동방과 공개 파티(이슈 #11)는 같은 경로를 쓴다. 공개 파티는 정원이 없고, 응원은 전달만 하고 저장하지 않는다.</li>
  * </ul>
  * 모든 상태 변경은 하나의 잠금 안에서 일어난다. 시연 규모(방 하나, 5명 안팎)에서는 이 단순함이 더 중요하다.
  * 메시지 전송은 연결마다 {@code ConcurrentWebSocketSessionDecorator}로 감싸 두어 잠금 안에서 보내도 오래 막히지 않는다.
  */
 @Slf4j
 @Component
-public class RoomSessionRegistry {
+public class RoomSessionRegistry implements PublicPartyOccupancy {
 
     /**
      * 응답 대기 시간 동안 메시지가 없어 닫을 때 쓰는 닫힘 상태(코드 4500).
@@ -65,8 +67,8 @@ public class RoomSessionRegistry {
     /** 연결 식별값 → 연결. JOIN 전 연결도 여기 있다 */
     private final Map<String, Connection> connections = new HashMap<>();
 
-    /** 운동방 식별값 → 방 상태. 참가자가 한 명도 없으면 지운다 */
-    private final Map<Long, RoomState> rooms = new HashMap<>();
+    /** 실시간 방(운동방·공개 파티) → 방 상태. 참가자가 한 명도 없으면 지운다 */
+    private final Map<SpaceKey, RoomState> rooms = new HashMap<>();
 
     public RoomSessionRegistry(RealtimeProperties properties, JsonMapper jsonMapper, Clock clock) {
         this.properties = properties;
@@ -117,13 +119,13 @@ public class RoomSessionRegistry {
             Instant now = clock.instant();
             connection.lastSeenAt = now;
 
-            RoomState room = rooms.computeIfAbsent(ticket.roomId(), id -> new RoomState(id, ticket.capacity()));
+            RoomState room = rooms.computeIfAbsent(ticket.space(), space -> new RoomState(space, ticket.capacity()));
             RoomPresence existing = room.presences.get(ticket.participantId());
             if (existing != null) {
                 rejoin(room, existing, connection, now);
                 return;
             }
-            if (room.presences.size() >= room.capacity) {
+            if (room.isFull()) {
                 connections.remove(sessionId);
                 sendErrorAndClose(connection, RealtimeErrorCode.ROOM_FULL);
                 removeIfEmpty(room);
@@ -132,10 +134,10 @@ public class RoomSessionRegistry {
 
             RoomPresence presence = new RoomPresence(ticket, sessionId);
             room.presences.put(presence.getParticipantId(), presence);
-            connection.bind(room.roomId, presence.getParticipantId());
+            connection.bind(room.space, presence.getParticipantId());
             sendSnapshot(connection, room, now, false);
             broadcastExcept(room, presence.getParticipantId(),
-                    message(ServerMessageType.PARTICIPANT_JOINED, room.roomId, presence.getParticipantId(), now, presence.toView()));
+                    message(ServerMessageType.PARTICIPANT_JOINED, room.space, presence.getParticipantId(), now, presence.toView()));
         }
     }
 
@@ -157,11 +159,11 @@ public class RoomSessionRegistry {
             }
         }
         presence.reconnect(connection.session.getId());
-        connection.bind(room.roomId, presence.getParticipantId());
+        connection.bind(room.space, presence.getParticipantId());
         sendSnapshot(connection, room, now, true);
         if (wasUnstable) {
             broadcastExcept(room, presence.getParticipantId(),
-                    message(ServerMessageType.CONNECTION_STATUS, room.roomId, presence.getParticipantId(), now,
+                    message(ServerMessageType.CONNECTION_STATUS, room.space, presence.getParticipantId(), now,
                             new ConnectionPayload(ConnectionStatus.CONNECTED)));
         }
     }
@@ -181,11 +183,11 @@ public class RoomSessionRegistry {
                 sendError(connection, RealtimeErrorCode.JOIN_REQUIRED);
                 return;
             }
-            RoomState room = rooms.get(connection.roomId);
+            RoomState room = rooms.get(connection.space);
             RoomPresence presence = room.presences.get(connection.participantId);
             presence.updateStatus(status);
             broadcastExcept(room, presence.getParticipantId(),
-                    message(ServerMessageType.PARTICIPANT_STATUS, room.roomId, presence.getParticipantId(), now, presence.toStatus()));
+                    message(ServerMessageType.PARTICIPANT_STATUS, room.space, presence.getParticipantId(), now, presence.toStatus()));
         }
     }
 
@@ -214,13 +216,13 @@ public class RoomSessionRegistry {
                 sendError(connection, RealtimeErrorCode.JOIN_REQUIRED);
                 return;
             }
-            RoomState room = rooms.get(connection.roomId);
+            RoomState room = rooms.get(connection.space);
             RoomPresence presence = room.presences.get(connection.participantId);
             if (!presence.canSharePose() || !presence.tryAcquirePoseSlot(now, properties.poseMaxPerSecond())) {
                 return;
             }
             broadcastExcept(room, presence.getParticipantId(),
-                    message(ServerMessageType.PARTICIPANT_POSE, room.roomId, presence.getParticipantId(), now, pose));
+                    message(ServerMessageType.PARTICIPANT_POSE, room.space, presence.getParticipantId(), now, pose));
         }
     }
 
@@ -238,7 +240,7 @@ public class RoomSessionRegistry {
      * DB 저장은 여기서 하지 않는다(잠금 안에서 DB를 기다리지 않게). 전달에 성공하면 저장할 내용을 돌려주고,
      * 호출한 쪽이 잠금 밖에서 {@code cheer} 도메인으로 넘긴다.
      *
-     * @return 대상에게 전달했으면 저장할 응원, 전달하지 않았으면(실패·연타) 비어 있음
+     * @return 대상에게 전달했으면 저장할 응원, 전달하지 않았으면(실패·연타) 또는 공개 파티 응원이면 비어 있음
      */
     public Optional<CheerRecordCommand> cheer(String sessionId, CheerPayload cheer) {
         synchronized (lock) {
@@ -256,7 +258,7 @@ public class RoomSessionRegistry {
                 sendError(connection, RealtimeErrorCode.INVALID_MESSAGE);
                 return Optional.empty();
             }
-            RoomState room = rooms.get(connection.roomId);
+            RoomState room = rooms.get(connection.space);
             Connection target = connectedConnectionOf(room, cheer.targetParticipantId());
             if (target == null) {
                 sendError(connection, RealtimeErrorCode.CHEER_TARGET_UNAVAILABLE);
@@ -266,10 +268,14 @@ public class RoomSessionRegistry {
             if (!sender.tryAcquireCheerSlot(cheer.targetParticipantId(), now, properties.cheerCooldown())) {
                 return Optional.empty();
             }
-            send(target, message(ServerMessageType.CHEER_RECEIVED, room.roomId, connection.participantId, now, cheer));
-            send(connection, message(ServerMessageType.CHEER_SENT, room.roomId, connection.participantId, now, cheer));
+            send(target, message(ServerMessageType.CHEER_RECEIVED, room.space, connection.participantId, now, cheer));
+            send(connection, message(ServerMessageType.CHEER_SENT, room.space, connection.participantId, now, cheer));
+            if (!room.space.isRoom()) {
+                // 공개 파티 응원은 전달만 한다. 응원 저장(cheer 테이블)은 친구 파티 운동방 기준이다
+                return Optional.empty();
+            }
             return Optional.of(new CheerRecordCommand(
-                    room.roomId, connection.participantId, cheer.targetParticipantId(), cheer.reaction(), now));
+                    room.space.id(), connection.participantId, cheer.targetParticipantId(), cheer.reaction(), now));
         }
     }
 
@@ -284,7 +290,7 @@ public class RoomSessionRegistry {
             }
             Instant now = clock.instant();
             connection.lastSeenAt = now;
-            send(connection, message(ServerMessageType.PONG, connection.roomId, connection.participantId, now, null));
+            send(connection, message(ServerMessageType.PONG, connection.space, connection.participantId, now, null));
         }
     }
 
@@ -298,10 +304,10 @@ public class RoomSessionRegistry {
                 return;
             }
             if (connection.isJoined()) {
-                RoomState room = rooms.get(connection.roomId);
+                RoomState room = rooms.get(connection.space);
                 room.presences.remove(connection.participantId);
                 broadcastExcept(room, connection.participantId,
-                        message(ServerMessageType.PARTICIPANT_LEFT, room.roomId, connection.participantId, clock.instant(),
+                        message(ServerMessageType.PARTICIPANT_LEFT, room.space, connection.participantId, clock.instant(),
                                 new LeftPayload(LeaveReason.LEFT)));
                 removeIfEmpty(room);
             }
@@ -373,7 +379,7 @@ public class RoomSessionRegistry {
                     if (presence.isReconnectExpired(now, properties.reconnectGrace())) {
                         room.presences.remove(presence.getParticipantId());
                         broadcastExcept(room, presence.getParticipantId(),
-                                message(ServerMessageType.PARTICIPANT_LEFT, room.roomId, presence.getParticipantId(), now,
+                                message(ServerMessageType.PARTICIPANT_LEFT, room.space, presence.getParticipantId(), now,
                                         new LeftPayload(LeaveReason.TIMEOUT)));
                     }
                 }
@@ -383,12 +389,30 @@ public class RoomSessionRegistry {
     }
 
     /**
-     * 운동방의 현재 참가자 목록(입장 순서). 점검·테스트용이다.
+     * 친구 파티 운동방의 현재 참가자 목록(입장 순서). 점검·테스트용이다.
      */
     public List<ParticipantView> participants(Long roomId) {
+        return participants(SpaceKey.room(roomId));
+    }
+
+    /**
+     * 실시간 방의 현재 참가자 목록(입장 순서). 점검·테스트용이다.
+     */
+    public List<ParticipantView> participants(SpaceKey space) {
         synchronized (lock) {
-            RoomState room = rooms.get(roomId);
+            RoomState room = rooms.get(space);
             return room == null ? List.of() : room.views();
+        }
+    }
+
+    /**
+     * 공개 파티의 현재 참가자 수(연결 불안정 포함). 홈 카드 조회 API가 쓴다.
+     */
+    @Override
+    public int countParticipants(Long partyId) {
+        synchronized (lock) {
+            RoomState room = rooms.get(SpaceKey.publicParty(partyId));
+            return room == null ? 0 : room.presences.size();
         }
     }
 
@@ -408,7 +432,7 @@ public class RoomSessionRegistry {
 
     /** 입장한 연결의 참가자를 연결 불안정으로 바꾸고 다른 참가자에게 알린다(이미 다른 연결로 바뀌었으면 무시) */
     private void markUnstable(Connection connection, Instant now) {
-        RoomState room = rooms.get(connection.roomId);
+        RoomState room = rooms.get(connection.space);
         if (room == null) {
             return;
         }
@@ -418,7 +442,7 @@ public class RoomSessionRegistry {
         }
         presence.markUnstable(now);
         broadcastExcept(room, presence.getParticipantId(),
-                message(ServerMessageType.CONNECTION_STATUS, room.roomId, presence.getParticipantId(), now,
+                message(ServerMessageType.CONNECTION_STATUS, room.space, presence.getParticipantId(), now,
                         new ConnectionPayload(ConnectionStatus.UNSTABLE)));
     }
 
@@ -438,7 +462,7 @@ public class RoomSessionRegistry {
      * @param reconnected 이미 있던 자리로 돌아온 입장(재접속·새 창)이면 true
      */
     private void sendSnapshot(Connection connection, RoomState room, Instant now, boolean reconnected) {
-        send(connection, message(ServerMessageType.ROOM_SNAPSHOT, room.roomId, connection.participantId, now,
+        send(connection, message(ServerMessageType.ROOM_SNAPSHOT, room.space, connection.participantId, now,
                 new RoomSnapshotPayload(room.capacity, room.views(), reconnected)));
     }
 
@@ -458,7 +482,7 @@ public class RoomSessionRegistry {
 
     /** ERROR를 보낸다(연결은 닫지 않음) */
     private void sendError(Connection connection, RealtimeErrorCode errorCode) {
-        send(connection, message(ServerMessageType.ERROR, connection.roomId, connection.participantId, clock.instant(),
+        send(connection, message(ServerMessageType.ERROR, connection.space, connection.participantId, clock.instant(),
                 ErrorPayload.from(errorCode)));
     }
 
@@ -471,13 +495,17 @@ public class RoomSessionRegistry {
     /** 방에 참가자가 없으면 지운다 */
     private void removeIfEmpty(RoomState room) {
         if (room.presences.isEmpty()) {
-            rooms.remove(room.roomId);
+            rooms.remove(room.space);
         }
     }
 
-    /** 공통 봉투를 만든다 */
-    private ServerMessage message(ServerMessageType type, Long roomId, Long participantId, Instant now, Object payload) {
-        return new ServerMessage(type, roomId, participantId, now.toString(), payload);
+    /**
+     * 공통 봉투를 만든다. 친구 파티 운동방이면 roomId, 공개 파티면 partyId를 채운다. 방이 정해지기 전이면 둘 다 null이다.
+     */
+    private ServerMessage message(ServerMessageType type, SpaceKey space, Long participantId, Instant now, Object payload) {
+        Long roomId = space != null && space.isRoom() ? space.id() : null;
+        Long partyId = space != null && !space.isRoom() ? space.id() : null;
+        return new ServerMessage(type, roomId, partyId, participantId, now.toString(), payload);
     }
 
     /** 한 연결로 보낸다 */
@@ -511,7 +539,7 @@ public class RoomSessionRegistry {
     }
 
     /**
-     * 연결 하나. JOIN 전에는 roomId·participantId가 null이다.
+     * 연결 하나. JOIN 전에는 space·participantId가 null이다.
      */
     private static final class Connection {
 
@@ -524,8 +552,8 @@ public class RoomSessionRegistry {
         /** 마지막으로 메시지를 받은 시각(응답 대기 시간 기준) */
         private Instant lastSeenAt;
 
-        /** 입장한 운동방. JOIN 전이면 null */
-        private Long roomId;
+        /** 입장한 실시간 방(운동방 또는 공개 파티). JOIN 전이면 null */
+        private SpaceKey space;
 
         /** 입장한 참가자. JOIN 전이면 null */
         private Long participantId;
@@ -537,32 +565,37 @@ public class RoomSessionRegistry {
         }
 
         private boolean isJoined() {
-            return roomId != null;
+            return space != null;
         }
 
-        private void bind(Long roomId, Long participantId) {
-            this.roomId = roomId;
+        private void bind(SpaceKey space, Long participantId) {
+            this.space = space;
             this.participantId = participantId;
         }
     }
 
     /**
-     * 운동방 하나의 상태.
+     * 실시간 방 하나(운동방 또는 공개 파티)의 상태.
      */
     private static final class RoomState {
 
-        /** 운동방 식별값 */
-        private final Long roomId;
+        /** 실시간 방 식별값 */
+        private final SpaceKey space;
 
-        /** 정원. 방 상태를 처음 만들 때의 DB 값이다 */
-        private final int capacity;
+        /** 정원. 운동방은 방 상태를 처음 만들 때의 DB 값, 공개 파티는 정원이 없어 null */
+        private final Integer capacity;
 
         /** 참가자 식별값 → 상태. 입장 순서를 유지한다 */
         private final Map<Long, RoomPresence> presences = new LinkedHashMap<>();
 
-        private RoomState(Long roomId, int capacity) {
-            this.roomId = roomId;
+        private RoomState(SpaceKey space, Integer capacity) {
+            this.space = space;
             this.capacity = capacity;
+        }
+
+        /** 정원이 있고 다 찼는지. 정원이 없으면(공개 파티) 언제나 false */
+        private boolean isFull() {
+            return capacity != null && presences.size() >= capacity;
         }
 
         private List<ParticipantView> views() {

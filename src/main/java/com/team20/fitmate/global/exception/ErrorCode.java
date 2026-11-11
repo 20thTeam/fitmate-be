@@ -70,6 +70,11 @@ public enum ErrorCode {
     /** 운동 코드에 해당하는 운동이 없음 */
     EXERCISE_NOT_FOUND(HttpStatus.NOT_FOUND, "404-7", "운동을 찾을 수 없습니다."),
 
+    // ===== 공개 파티 =====
+
+    /** 공개 파티 식별값이 설정과 다름 */
+    PUBLIC_PARTY_NOT_FOUND(HttpStatus.NOT_FOUND, "404-8", "공개 파티를 찾을 수 없습니다."),
+
     // ===== 운동 기록 (충돌) =====
 
     /** 이미 종료된 운동 기록에 다시 제출함 */
@@ -79,7 +84,10 @@ public enum ErrorCode {
     ROUTINE_NOT_STARTABLE(HttpStatus.CONFLICT, "409-2", "운동을 시작할 수 없는 루틴입니다."),
 
     /** 종료되지 않은 운동 기록으로 다음 회차를 추천받으려 함 */
-    WORKOUT_NOT_FINISHED(HttpStatus.CONFLICT, "409-3", "아직 종료되지 않은 운동 기록입니다.");
+    WORKOUT_NOT_FINISHED(HttpStatus.CONFLICT, "409-3", "아직 종료되지 않은 운동 기록입니다."),
+
+    /** 공개 파티가 열려 있지 않은 시간에 입장하려 함 */
+    PUBLIC_PARTY_CLOSED(HttpStatus.CONFLICT, "409-4", "공개 파티가 지금 열려 있지 않습니다.");
 
     /** 응답 HTTP 상태 */
     private final HttpStatus status;
