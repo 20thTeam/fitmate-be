@@ -31,6 +31,12 @@ public enum RealtimeErrorCode {
     /** REST 입장(POST /api/rooms/{roomId}/enter)을 하지 않은 방에 실시간 연결을 시도함 */
     NOT_ENTERED_ROOM("운동방 입장을 먼저 완료해 주세요.", true),
 
+    /** 공개 파티 식별값이 설정과 다름(이슈 #11) */
+    PUBLIC_PARTY_NOT_FOUND("공개 파티를 찾을 수 없습니다.", true),
+
+    /** 공개 파티가 열려 있지 않은 시간에 입장하려 함(이슈 #11) */
+    PUBLIC_PARTY_CLOSED("공개 파티가 지금 열려 있지 않습니다.", true),
+
     /** 정원이 찼음 */
     ROOM_FULL("운동방 정원이 가득 찼습니다.", true),
 

@@ -1,10 +1,12 @@
 package com.team20.fitmate.realtime.room;
 
+import com.team20.fitmate.domain.party.service.PublicPartyService;
 import com.team20.fitmate.domain.participant.entity.Participant;
 import com.team20.fitmate.domain.participant.service.ParticipantService;
 import com.team20.fitmate.domain.room.entity.Room;
 import com.team20.fitmate.domain.room.service.RoomService;
 import com.team20.fitmate.global.exception.CustomException;
+import com.team20.fitmate.global.exception.ErrorCode;
 import com.team20.fitmate.realtime.message.RealtimeErrorCode;
 import com.team20.fitmate.realtime.message.RealtimeException;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +15,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * JOIN 요청을 DB 기준으로 확인한다. 참가자가 있는지, 운동방이 있는지, REST 입장을 마친 방인지 본다.
+ * <p>
+ * 공개 파티(이슈 #11) 입장은 REST 입장 없이 참가자와 오픈 상태만 본다.
  * <p>
  * 실시간 계층에서 DB를 읽는 곳은 여기 하나다. 필요한 값은 트랜잭션 안에서 {@link JoinTicket}으로 옮겨 담는다.
  * 정원 판단은 DB가 아니라 {@link RoomSessionRegistry}에서 현재 연결 수로 한다(이슈 #2 B와 합의).
@@ -23,6 +27,7 @@ public class JoinValidator {
 
     private final ParticipantService participantService;
     private final RoomService roomService;
+    private final PublicPartyService publicPartyService;
 
     /**
      * 토큰과 운동방 식별값을 확인하고 입장 정보를 돌려준다.
@@ -41,6 +46,29 @@ public class JoinValidator {
             throw new RealtimeException(RealtimeErrorCode.NOT_ENTERED_ROOM);
         }
         return new JoinTicket(room.getId(), room.getCapacity(),
+                participant.getId(), participant.getNickname(), participant.getCharacterCode());
+    }
+
+    /**
+     * 공개 파티 입장을 확인한다. 친구 파티 소속(REST 입장)과 관계없이 임시 프로필(참가자)만 있으면 된다.
+     * <p>
+     * 이미 들어와 있던 참가자의 재접속도 닫힌 뒤에는 거부한다(닫힌 파티에 새로 붙는 연결을 만들지 않는다).
+     *
+     * @throws RealtimeException 참가자가 없으면 {@link RealtimeErrorCode#PARTICIPANT_NOT_FOUND},
+     *                           파티가 없으면 {@link RealtimeErrorCode#PUBLIC_PARTY_NOT_FOUND},
+     *                           닫혀 있으면 {@link RealtimeErrorCode#PUBLIC_PARTY_CLOSED}
+     */
+    @Transactional(readOnly = true)
+    public JoinTicket validatePublicParty(String token, Long partyId) {
+        Participant participant = findParticipant(token);
+        try {
+            publicPartyService.validateJoinable(partyId);
+        } catch (CustomException e) {
+            throw new RealtimeException(e.getErrorCode() == ErrorCode.PUBLIC_PARTY_CLOSED
+                    ? RealtimeErrorCode.PUBLIC_PARTY_CLOSED
+                    : RealtimeErrorCode.PUBLIC_PARTY_NOT_FOUND);
+        }
+        return JoinTicket.publicParty(partyId,
                 participant.getId(), participant.getNickname(), participant.getCharacterCode());
     }
 

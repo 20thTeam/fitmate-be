@@ -17,6 +17,16 @@ realtime:
   pose-max-per-second: 15  # 참가자 한 명이 1초에 중계할 수 있는 동작 정보 수. 넘는 메시지는 버린다
   cheer-cooldown: 1s       # 같은 친구에게 응원을 다시 보낼 수 있을 때까지의 시간. 그 안의 응원은 연타로 보고 무시
 
+# 공개 파티(공개 선셋 에어로빅, 이슈 #11 P1). 오픈·종료 시각·요일·시간대는 모두 PM 확정 전 임시값이다.
+# 종료 시각이 오픈 시각보다 이르면 자정을 넘겨 다음 날 닫는다. days를 비우면 매일 연다.
+public-party:
+  party-id: 1
+  name: 선셋 에어로빅
+  zone: ${PUBLIC_PARTY_ZONE:Asia/Seoul}
+  open-time: "${PUBLIC_PARTY_OPEN_TIME:22:00}"
+  close-time: "${PUBLIC_PARTY_CLOSE_TIME:23:00}"
+  days: []
+
 # 운동별 AI 가이드 시범 동작 참조 (이슈 #5). 3D 담당이 정하면 "운동 코드: 참조" 형식으로 적는다.
 # 적지 않은 운동은 시범 없음으로 응답하고, 다른 운동의 시범으로 대신하지 않는다.
 # 예) SQUAT: guide/squat.glb
