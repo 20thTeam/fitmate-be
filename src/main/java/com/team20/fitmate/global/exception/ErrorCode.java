@@ -71,7 +71,10 @@ public enum ErrorCode {
     WORKOUT_ALREADY_FINISHED(HttpStatus.CONFLICT, "409-1", "이미 종료된 운동 기록입니다."),
 
     /** 추천 불가 등 운동을 시작할 수 없는 루틴 */
-    ROUTINE_NOT_STARTABLE(HttpStatus.CONFLICT, "409-2", "운동을 시작할 수 없는 루틴입니다.");
+    ROUTINE_NOT_STARTABLE(HttpStatus.CONFLICT, "409-2", "운동을 시작할 수 없는 루틴입니다."),
+
+    /** 종료되지 않은 운동 기록으로 다음 회차를 추천받으려 함 */
+    WORKOUT_NOT_FINISHED(HttpStatus.CONFLICT, "409-3", "아직 종료되지 않은 운동 기록입니다.");
 
     /** 응답 HTTP 상태 */
     private final HttpStatus status;
