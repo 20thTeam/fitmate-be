@@ -8,9 +8,15 @@ import com.team20.fitmate.domain.routine.dto.RoutineResponse;
 import com.team20.fitmate.domain.routine.entity.Goal;
 import com.team20.fitmate.domain.routine.entity.Routine;
 import com.team20.fitmate.domain.routine.entity.RoutineExercise;
+import com.team20.fitmate.domain.routine.recommend.NextRoundPlan;
+import com.team20.fitmate.domain.routine.recommend.NextRoundRecommender;
 import com.team20.fitmate.domain.routine.recommend.RecommendedExercise;
 import com.team20.fitmate.domain.routine.recommend.RoutineRecommender;
 import com.team20.fitmate.domain.routine.repository.RoutineRepository;
+import com.team20.fitmate.domain.workout.entity.ExerciseRecord;
+import com.team20.fitmate.domain.workout.entity.Workout;
+import com.team20.fitmate.domain.workout.repository.ExerciseRecordRepository;
+import com.team20.fitmate.domain.workout.repository.WorkoutRepository;
 import com.team20.fitmate.global.exception.CustomException;
 import com.team20.fitmate.global.exception.ErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +48,9 @@ public class RoutineService {
     private final RoutineRecommender routineRecommender;
     private final ExerciseRepository exerciseRepository;
     private final RoutineRepository routineRepository;
+    private final NextRoundRecommender nextRoundRecommender;
+    private final WorkoutRepository workoutRepository;
+    private final ExerciseRecordRepository exerciseRecordRepository;
 
     /**
      * 목표로 첫 회차 루틴을 추천받아 참가자에 연결해 저장한다.
@@ -55,6 +64,53 @@ public class RoutineService {
         Routine routine = recommend(participant, goal);
         routineRepository.save(routine);
         return RoutineResponse.from(routine);
+    }
+
+    /**
+     * 종료된 운동 기록을 근거로 다음 회차 루틴을 추천받아 저장한다(기능 8.2).
+     * <p>
+     * 운동 구성·순서·세트는 이전 회차와 같고, 추천 규칙에 따라 수행량만 바뀐다. 근거가 없으면 올리지 않는다.
+     * 같은 운동 기록으로 다시 요청하면 새로 만들지 않고 처음 만든 추천을 돌려준다(결과 화면 재방문 대비).
+     * 동시에 두 번 요청해도 하나만 만들도록 운동 기록을 잠그고 확인한다.
+     *
+     * @throws CustomException 운동 기록이 없거나 본인 기록이 아니면 {@link ErrorCode#WORKOUT_NOT_FOUND},
+     *                         아직 종료되지 않았으면 {@link ErrorCode#WORKOUT_NOT_FINISHED}
+     */
+    @Transactional
+    public RoutineResponse createNextRound(String clientToken, Long workoutId) {
+        Participant participant = participantService.findByClientToken(clientToken);
+        Workout workout = workoutRepository.findByIdForUpdate(workoutId)
+                .filter(found -> found.isOwnedBy(participant))
+                .orElseThrow(() -> new CustomException(ErrorCode.WORKOUT_NOT_FOUND));
+        if (!workout.isFinished()) {
+            throw new CustomException(ErrorCode.WORKOUT_NOT_FINISHED);
+        }
+        return RoutineResponse.from(routineRepository.findByBasedOnWorkoutId(workoutId)
+                .orElseGet(() -> routineRepository.save(recommendNext(workout))));
+    }
+
+    /**
+     * 이전 회차 목표와 기록을 추천 규칙에 넘겨 다음 회차 루틴을 만든다.
+     */
+    private Routine recommendNext(Workout workout) {
+        Map<Long, ExerciseRecord> recordsByRoutineExercise = exerciseRecordRepository
+                .findByWorkoutIdOrderByIdAsc(workout.getId()).stream()
+                .collect(Collectors.toMap(record -> record.getRoutineExercise().getId(), Function.identity()));
+        List<RoutineExercise> previous = workout.getRoutine().getRoutineExercises();
+        List<NextRoundRecommender.ExerciseResult> results = previous.stream()
+                .map(target -> new NextRoundRecommender.ExerciseResult(
+                        target, recordsByRoutineExercise.get(target.getId())))
+                .toList();
+
+        NextRoundPlan plan = nextRoundRecommender.plan(results);
+        Routine routine = Routine.nextRound(workout, plan.adjustmentType(),
+                plan.exercises().stream().map(NextRoundPlan.AdjustedExercise::reason).toList());
+        for (int i = 0; i < previous.size(); i++) {
+            RoutineExercise before = previous.get(i);
+            routine.addExercise(RoutineExercise.of(before.getExercise(), before.getSortOrder(),
+                    plan.exercises().get(i).amount(), before.getTargetSets(), before.getTag()));
+        }
+        return routine;
     }
 
     /**
