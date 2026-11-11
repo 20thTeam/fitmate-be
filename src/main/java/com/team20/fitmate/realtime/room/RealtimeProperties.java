@@ -17,6 +17,7 @@ import java.time.Duration;
  * @param sendBufferSize   한 연결에 쌓아 둘 수 있는 보낼 메시지 크기(바이트). 넘으면 그 연결을 닫는다
  * @param poseMaxBytes     동작 정보(POSE) 메시지 하나의 최대 크기(바이트). 넘으면 INVALID_MESSAGE로 거절한다
  * @param poseMaxPerSecond 참가자 한 명이 1초 동안 중계할 수 있는 동작 정보 수. 넘는 메시지는 조용히 버린다
+ * @param cheerCooldown    같은 친구에게 응원을 다시 보낼 수 있을 때까지의 시간. 그 안의 응원은 연타로 보고 무시한다
  */
 @ConfigurationProperties(prefix = "realtime")
 public record RealtimeProperties(
@@ -26,6 +27,7 @@ public record RealtimeProperties(
         @DefaultValue("5s") Duration sendTimeLimit,
         @DefaultValue("65536") int sendBufferSize,
         @DefaultValue("2048") int poseMaxBytes,
-        @DefaultValue("15") int poseMaxPerSecond
+        @DefaultValue("15") int poseMaxPerSecond,
+        @DefaultValue("1s") Duration cheerCooldown
 ) {
 }

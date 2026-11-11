@@ -9,6 +9,8 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * 운동방 안 참가자 한 명의 현재 상태. 메모리에만 있고 DB에 저장하지 않는다.
@@ -55,6 +57,10 @@ class RoomPresence {
     @Getter(AccessLevel.NONE)
     private final Deque<Instant> recentPoseTimes = new ArrayDeque<>();
 
+    /** 받은 사람 식별값 → 그 사람에게 마지막으로 응원을 전달한 시각. 연타 제한에만 쓴다 */
+    @Getter(AccessLevel.NONE)
+    private final Map<Long, Instant> lastCheerAtByTarget = new HashMap<>();
+
     RoomPresence(JoinTicket ticket, String sessionId) {
         this.participantId = ticket.participantId();
         this.nickname = ticket.nickname();
@@ -97,6 +103,23 @@ class RoomPresence {
      */
     boolean canSharePose() {
         return progressStatus != ProgressStatus.CAMERA_ERROR;
+    }
+
+    /**
+     * 이 참가자가 대상에게 응원을 하나 더 보내도 되는지 확인하고, 되면 지금 시각을 기록한다.
+     * <p>
+     * 같은 대상에게 마지막으로 전달한 뒤 {@code cooldown}이 지나야 다시 보낼 수 있다(연타 제한).
+     * 대상마다 따로 세므로 A에게 보낸 직후 B에게 보내는 것은 막지 않는다.
+     *
+     * @return 보내도 되면 true, 연타라 무시해야 하면 false
+     */
+    boolean tryAcquireCheerSlot(Long targetParticipantId, Instant now, Duration cooldown) {
+        Instant last = lastCheerAtByTarget.get(targetParticipantId);
+        if (last != null && now.isBefore(last.plus(cooldown))) {
+            return false;
+        }
+        lastCheerAtByTarget.put(targetParticipantId, now);
+        return true;
     }
 
     /**

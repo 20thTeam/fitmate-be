@@ -15,3 +15,4 @@ realtime:
   sweep-interval-ms: 1000  # 위 시간들을 확인하는 주기
   pose-max-bytes: 2048     # 동작 정보(POSE) 메시지 하나의 최대 크기(바이트). 넘으면 INVALID_MESSAGE
   pose-max-per-second: 15  # 참가자 한 명이 1초에 중계할 수 있는 동작 정보 수. 넘는 메시지는 버린다
+  cheer-cooldown: 1s       # 같은 친구에게 응원을 다시 보낼 수 있을 때까지의 시간. 그 안의 응원은 연타로 보고 무시

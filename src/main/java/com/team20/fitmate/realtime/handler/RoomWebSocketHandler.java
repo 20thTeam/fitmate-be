@@ -1,5 +1,8 @@
 package com.team20.fitmate.realtime.handler;
 
+import com.team20.fitmate.domain.cheer.dto.CheerRecordCommand;
+import com.team20.fitmate.domain.cheer.service.CheerRecorder;
+import com.team20.fitmate.realtime.message.CheerPayload;
 import com.team20.fitmate.realtime.message.ClientMessageType;
 import com.team20.fitmate.realtime.message.JoinPayload;
 import com.team20.fitmate.realtime.message.PosePayload;
@@ -12,6 +15,7 @@ import com.team20.fitmate.realtime.room.RealtimeProperties;
 import com.team20.fitmate.realtime.room.RoomSessionRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -39,6 +43,9 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
     private final RealtimeProperties properties;
     private final JsonMapper jsonMapper;
 
+    /** 응원 저장 구현체. 데이터 담당이 만들기 전에는 없을 수 있다 */
+    private final ObjectProvider<CheerRecorder> cheerRecorder;
+
     /**
      * 연결이 맺어지면 동시 전송에 안전하도록 감싸서 등록한다. JOIN 전까지는 어느 방에도 속하지 않는다.
      */
@@ -63,6 +70,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
                 case JOIN -> handleJoin(sessionId, payload);
                 case STATUS -> handleStatus(sessionId, payload);
                 case POSE -> handlePose(sessionId, message, payload);
+                case CHEER -> handleCheer(sessionId, payload);
                 case PING -> registry.ping(sessionId);
                 case LEAVE -> registry.leave(sessionId);
             }
@@ -118,6 +126,39 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
             throw new RealtimeException(RealtimeErrorCode.INVALID_MESSAGE);
         }
         registry.relayPose(sessionId, pose);
+    }
+
+    /**
+     * CHEER: 대상·리액션 형식을 검사하고 대상 한 명에게만 전달한다.
+     * 전달에 성공한 응원만 레지스트리 잠금 밖에서 {@code cheer} 도메인으로 넘겨 저장한다.
+     */
+    private void handleCheer(String sessionId, JsonNode payload) {
+        CheerPayload cheer = jsonMapper.treeToValue(payload, CheerPayload.class);
+        if (cheer == null || !cheer.hasValidFormat()) {
+            throw new RealtimeException(RealtimeErrorCode.INVALID_MESSAGE);
+        }
+        registry.cheer(sessionId, cheer).ifPresent(this::recordCheer);
+    }
+
+    /**
+     * 전달된 응원을 저장 구현체({@link CheerRecorder})로 넘긴다.
+     * <p>
+     * 응원은 이미 대상에게 전달됐으므로 저장에 실패해도 취소하거나 보낸 사람에게 오류를 보내지 않고 로그만 남긴다.
+     * 저장 구현체가 아직 없으면(데이터 담당 작업 전) 저장하지 않고 로그만 남긴다.
+     */
+    private void recordCheer(CheerRecordCommand command) {
+        CheerRecorder recorder = cheerRecorder.getIfAvailable();
+        if (recorder == null) {
+            log.info("응원 저장 구현체가 없어 저장하지 않음 roomId={} senderId={} receiverId={} reaction={}",
+                    command.roomId(), command.senderId(), command.receiverId(), command.reaction());
+            return;
+        }
+        try {
+            recorder.record(command);
+        } catch (RuntimeException e) {
+            log.warn("응원 저장 실패(전달은 완료) roomId={} senderId={} receiverId={}",
+                    command.roomId(), command.senderId(), command.receiverId(), e);
+        }
     }
 
     /**

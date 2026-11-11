@@ -22,6 +22,12 @@ public enum ServerMessageType {
     /** 다른 참가자의 동작 정보. 받은 그대로 전달하며 DB에 저장하지 않는다 */
     PARTICIPANT_POSE,
 
+    /** 나에게 온 응원. 받은 사람에게만 간다. participantId는 보낸 사람이다 */
+    CHEER_RECEIVED,
+
+    /** 내가 보낸 응원이 대상에게 전달됨. 보낸 사람에게만 간다. 화면에 응원 대상을 확인시키는 데 쓴다 */
+    CHEER_SENT,
+
     /** 다른 참가자의 연결 상태가 바뀜(연결됨 ↔ 연결 불안정) */
     CONNECTION_STATUS,
 

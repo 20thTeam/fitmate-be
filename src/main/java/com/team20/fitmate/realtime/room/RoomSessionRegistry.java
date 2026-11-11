@@ -1,5 +1,7 @@
 package com.team20.fitmate.realtime.room;
 
+import com.team20.fitmate.domain.cheer.dto.CheerRecordCommand;
+import com.team20.fitmate.realtime.message.CheerPayload;
 import com.team20.fitmate.realtime.message.ConnectionPayload;
 import com.team20.fitmate.realtime.message.ErrorPayload;
 import com.team20.fitmate.realtime.message.LeftPayload;
@@ -26,6 +28,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * 운동방별 참가자 상태와 연결을 메모리에서 관리하고, 같은 방에 이벤트를 전달한다.
@@ -217,6 +220,55 @@ public class RoomSessionRegistry {
     }
 
     /**
+     * 같은 방 친구 한 명에게 응원을 보낸다(1:1). 다른 참가자에게는 보내지 않는다.
+     * <ul>
+     *     <li>받은 사람: CHEER_RECEIVED (participantId = 보낸 사람)</li>
+     *     <li>보낸 사람: CHEER_SENT (같은 내용). 화면에서 응원 대상을 확인하는 데 쓴다</li>
+     *     <li>대상이 같은 방에 없거나(퇴장·다른 방) 연결 불안정: 보낸 사람에게 CHEER_TARGET_UNAVAILABLE. 연결은 유지한다</li>
+     *     <li>자기 자신을 대상으로 하면 INVALID_MESSAGE</li>
+     *     <li>같은 대상에게 {@code realtime.cheer-cooldown} 안에 다시 보내면 연타로 보고 오류 없이 무시한다</li>
+     * </ul>
+     * 대상이 없어 실패한 응원은 연타 제한 시간에 넣지 않는다.
+     * <p>
+     * DB 저장은 여기서 하지 않는다(잠금 안에서 DB를 기다리지 않게). 전달에 성공하면 저장할 내용을 돌려주고,
+     * 호출한 쪽이 잠금 밖에서 {@code cheer} 도메인으로 넘긴다.
+     *
+     * @return 대상에게 전달했으면 저장할 응원, 전달하지 않았으면(실패·연타) 비어 있음
+     */
+    public Optional<CheerRecordCommand> cheer(String sessionId, CheerPayload cheer) {
+        synchronized (lock) {
+            Connection connection = connections.get(sessionId);
+            if (connection == null) {
+                return Optional.empty();
+            }
+            Instant now = clock.instant();
+            connection.lastSeenAt = now;
+            if (!connection.isJoined()) {
+                sendError(connection, RealtimeErrorCode.JOIN_REQUIRED);
+                return Optional.empty();
+            }
+            if (cheer.targetParticipantId().equals(connection.participantId)) {
+                sendError(connection, RealtimeErrorCode.INVALID_MESSAGE);
+                return Optional.empty();
+            }
+            RoomState room = rooms.get(connection.roomId);
+            Connection target = connectedConnectionOf(room, cheer.targetParticipantId());
+            if (target == null) {
+                sendError(connection, RealtimeErrorCode.CHEER_TARGET_UNAVAILABLE);
+                return Optional.empty();
+            }
+            RoomPresence sender = room.presences.get(connection.participantId);
+            if (!sender.tryAcquireCheerSlot(cheer.targetParticipantId(), now, properties.cheerCooldown())) {
+                return Optional.empty();
+            }
+            send(target, message(ServerMessageType.CHEER_RECEIVED, room.roomId, connection.participantId, now, cheer));
+            send(connection, message(ServerMessageType.CHEER_SENT, room.roomId, connection.participantId, now, cheer));
+            return Optional.of(new CheerRecordCommand(
+                    room.roomId, connection.participantId, cheer.targetParticipantId(), cheer.reaction(), now));
+        }
+    }
+
+    /**
      * 연결 유지 확인. 마지막 메시지 시각을 갱신하고 PONG으로 답한다. JOIN 전에도 보낼 수 있다.
      */
     public void ping(String sessionId) {
@@ -363,6 +415,16 @@ public class RoomSessionRegistry {
         broadcastExcept(room, presence.getParticipantId(),
                 message(ServerMessageType.CONNECTION_STATUS, room.roomId, presence.getParticipantId(), now,
                         new ConnectionPayload(ConnectionStatus.UNSTABLE)));
+    }
+
+    /** 같은 방에서 지금 연결된 참가자의 연결을 찾는다. 방에 없거나 연결 불안정이면 null */
+    private Connection connectedConnectionOf(RoomState room, Long participantId) {
+        RoomPresence presence = room.presences.get(participantId);
+        if (presence == null || presence.getConnectionStatus() != ConnectionStatus.CONNECTED
+                || presence.getSessionId() == null) {
+            return null;
+        }
+        return connections.get(presence.getSessionId());
     }
 
     /** 본인에게 방 전체 상태를 보낸다 */

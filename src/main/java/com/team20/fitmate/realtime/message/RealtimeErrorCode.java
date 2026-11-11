@@ -40,6 +40,9 @@ public enum RealtimeErrorCode {
     /** 연결 후 정해진 시간 안에 JOIN을 보내지 않음 */
     JOIN_TIMEOUT("입장 요청이 없어 연결을 닫습니다.", true),
 
+    /** 응원 대상이 같은 방에 없거나(퇴장·다른 방) 연결 불안정이라 전달하지 못함. 연결은 유지한다 */
+    CHEER_TARGET_UNAVAILABLE("응원할 친구가 지금 연결되어 있지 않습니다.", false),
+
     /** 처리하지 못한 서버 오류. 내부 메시지는 노출하지 않는다 */
     INTERNAL_ERROR("서버 오류가 발생했습니다.", false);
 
