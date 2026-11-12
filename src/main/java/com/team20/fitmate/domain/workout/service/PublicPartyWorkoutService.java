@@ -2,6 +2,8 @@ package com.team20.fitmate.domain.workout.service;
 
 import com.team20.fitmate.domain.exercise.entity.Exercise;
 import com.team20.fitmate.domain.exercise.repository.ExerciseRepository;
+import com.team20.fitmate.domain.party.dto.PublicPartyResponse;
+import com.team20.fitmate.domain.party.service.PublicPartyService;
 import com.team20.fitmate.domain.participant.entity.Participant;
 import com.team20.fitmate.domain.participant.service.ParticipantService;
 import com.team20.fitmate.domain.workout.dto.PublicPartyFinishRequest;
@@ -25,6 +27,8 @@ import java.util.List;
  * <p>
  * 루틴 운동 기록(S7)과 같은 테이블을 쓰되 루틴·운동방 없이 저장한다. 친구 팀이 없으므로 팀 경험치는 쌓지 않고,
  * 루틴이 없으므로 2회차 추천도 만들지 않는다. 다른 참가자의 시작·종료와 무관하게 본인 요청으로만 바뀐다.
+ * <p>
+ * 오픈 시간 확인은 새로 시작할 때만 한다. 열려 있을 때 시작한 운동은 닫힌 뒤에도 이어 하거나 종료(기록 저장)할 수 있다.
  */
 @Service
 @RequiredArgsConstructor
@@ -34,19 +38,28 @@ public class PublicPartyWorkoutService {
     public static final String EXERCISE_CODE = "JUMPING_JACK";
 
     private final ParticipantService participantService;
+    private final PublicPartyService publicPartyService;
     private final ExerciseRepository exerciseRepository;
     private final WorkoutRepository workoutRepository;
     private final ExerciseRecordRepository exerciseRecordRepository;
 
     /**
      * 공개 파티 운동을 시작한다. 진행 중인 공개 파티 기록이 있으면 새로 만들지 않고 그 기록을 돌려준다(재접속 시 이어 하기).
+     * 이어 하기는 파티가 닫힌 뒤에도 되고, 새 기록은 열려 있을 때만 만든다.
+     *
+     * @throws CustomException 진행 중인 기록이 없는데 파티가 닫혀 있으면 {@link ErrorCode#PUBLIC_PARTY_CLOSED}
      */
     @Transactional
     public WorkoutResponse start(String clientToken) {
         Participant participant = participantService.findByClientToken(clientToken);
         Workout workout = workoutRepository
                 .findFirstByParticipantAndRoutineIsNullAndStatusOrderByIdDesc(participant, WorkoutStatus.IN_PROGRESS)
-                .orElseGet(() -> workoutRepository.save(Workout.startPublicParty(participant, LocalDateTime.now())));
+                .orElseGet(() -> {
+                    if (publicPartyService.getCurrent().status() != PublicPartyResponse.PartyStatus.OPEN) {
+                        throw new CustomException(ErrorCode.PUBLIC_PARTY_CLOSED);
+                    }
+                    return workoutRepository.save(Workout.startPublicParty(participant, LocalDateTime.now()));
+                });
         return WorkoutResponse.from(workout, List.of());
     }
 
