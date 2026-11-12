@@ -2,12 +2,14 @@ package com.team20.fitmate.domain.workout.controller;
 
 import com.jayway.jsonpath.JsonPath;
 import com.team20.fitmate.domain.participant.controller.ParticipantController;
+import com.team20.fitmate.domain.workout.PublicPartyTestClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,20 +20,25 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * 공개 파티 운동 기록 API의 요청 검증과 응답 형식을 확인하는 테스트.
+ * 공개 파티 운동 기록 API의 요청 검증과 응답 형식을 확인하는 테스트. 시각은 {@link PublicPartyTestClock}으로 고정한다.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional
+@Import(PublicPartyTestClock.class)
 class PublicPartyWorkoutControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
 
+    @Autowired
+    private PublicPartyTestClock.MutableClock clock;
+
     private String clientToken;
 
     @BeforeEach
     void setUp() throws Exception {
+        clock.set(PublicPartyTestClock.OPEN);
         String participant = mockMvc.perform(post("/api/participants")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"nickname\":\"아현\",\"characterCode\":\"CHARACTER_01\"}"))
@@ -72,6 +79,17 @@ class PublicPartyWorkoutControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.workout.kind").value("PUBLIC_PARTY"))
                 .andExpect(jsonPath("$.data.teamXp.status").value("NO_TEAM"));
+    }
+
+    @Test
+    @DisplayName("공개 파티가 닫혀 있으면 시작을 409-4로 거부한다")
+    void rejectStartWhenClosed() throws Exception {
+        clock.set(PublicPartyTestClock.CLOSED);
+
+        mockMvc.perform(post("/api/public-parties/workouts")
+                        .header(ParticipantController.TOKEN_HEADER, clientToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.resultCode").value("409-4"));
     }
 
     @Test

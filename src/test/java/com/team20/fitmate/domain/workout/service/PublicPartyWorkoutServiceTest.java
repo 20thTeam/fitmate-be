@@ -9,6 +9,7 @@ import com.team20.fitmate.domain.room.service.RoomService;
 import com.team20.fitmate.domain.routine.dto.RoutineResponse;
 import com.team20.fitmate.domain.routine.entity.Goal;
 import com.team20.fitmate.domain.routine.service.RoutineService;
+import com.team20.fitmate.domain.workout.PublicPartyTestClock;
 import com.team20.fitmate.domain.workout.dto.ExerciseRecordResponse;
 import com.team20.fitmate.domain.workout.dto.PublicPartyFinishRequest;
 import com.team20.fitmate.domain.workout.dto.WorkoutFinishRequest;
@@ -20,10 +21,12 @@ import com.team20.fitmate.domain.xp.entity.XpStatus;
 import com.team20.fitmate.domain.xp.repository.TeamXpLogRepository;
 import com.team20.fitmate.global.exception.CustomException;
 import com.team20.fitmate.global.exception.ErrorCode;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
@@ -32,11 +35,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * 공개 파티(선셋 에어로빅) 운동 기록의 시작·종료와, 팀 경험치·성장 기록과의 관계를 확인하는 테스트 (이슈 #11).
+ * 공개 파티(선셋 에어로빅) 운동 기록의 시작·종료와 오픈 시간, 팀 경험치·성장 기록과의 관계를 확인하는 테스트 (이슈 #11).
+ * 시각은 {@link PublicPartyTestClock}으로 고정한다(기본은 열린 시각).
  */
 @SpringBootTest
 @Transactional
+@Import(PublicPartyTestClock.class)
 class PublicPartyWorkoutServiceTest {
+
+    @Autowired
+    private PublicPartyTestClock.MutableClock clock;
 
     @Autowired
     private PublicPartyWorkoutService publicPartyWorkoutService;
@@ -58,6 +66,11 @@ class PublicPartyWorkoutServiceTest {
 
     @Autowired
     private TeamXpLogRepository teamXpLogRepository;
+
+    @BeforeEach
+    void openParty() {
+        clock.set(PublicPartyTestClock.OPEN);
+    }
 
     /** 참가자를 만들고 (선택) 친구 운동방에 입장시킨 뒤 토큰을 돌려준다 */
     private String participant(String nickname, boolean enterRoom) {
@@ -103,6 +116,29 @@ class PublicPartyWorkoutServiceTest {
 
         publicPartyWorkoutService.finish(token, first, measured(10, 60));
         assertThat(publicPartyWorkoutService.start(token).workoutId()).isNotEqualTo(first);
+    }
+
+    @Test
+    @DisplayName("공개 파티가 닫혀 있으면 새로 시작할 수 없고 409-4로 거부하며 기록을 만들지 않는다")
+    void rejectStartWhenClosed() {
+        String token = participant("아현", false);
+        clock.set(PublicPartyTestClock.CLOSED);
+
+        assertError(() -> publicPartyWorkoutService.start(token), ErrorCode.PUBLIC_PARTY_CLOSED);
+        assertThat(historyService.getMyHistory(token).workouts()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("열려 있을 때 시작한 운동은 닫힌 뒤에도 이어 하고 종료해 기록을 저장할 수 있다")
+    void continueAndFinishAfterClose() {
+        String token = participant("아현", false);
+        Long workoutId = publicPartyWorkoutService.start(token).workoutId();
+        clock.set(PublicPartyTestClock.CLOSED);
+
+        assertThat(publicPartyWorkoutService.start(token).workoutId()).isEqualTo(workoutId);
+        assertThat(publicPartyWorkoutService.finish(token, workoutId, measured(30, 300)).status())
+                .isEqualTo(WorkoutStatus.FINISHED);
+        assertError(() -> publicPartyWorkoutService.start(token), ErrorCode.PUBLIC_PARTY_CLOSED);
     }
 
     @Test
