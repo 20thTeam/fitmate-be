@@ -66,6 +66,7 @@ com.team20.fitmate
 │   └── exception                   # CustomException, ErrorCode, GlobalExceptionHandler
 │
 ├── domain
+│   ├── admin                       # 운영 화면(/admin) API · 운영 키(X-Admin-Key) 인증 [#31]
 │   ├── participant                 # 참가자 · 임시 식별 · 닉네임 · 캐릭터     [슬라이스 2]
 │   ├── room                        # 운동방 · 팀                              [슬라이스 2, 8]
 │   ├── exercise                    # 운동 목록 · 측정 방식 · 가이드 참조      [슬라이스 1, 5]
