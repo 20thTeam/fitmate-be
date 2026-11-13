@@ -2,6 +2,7 @@ package com.team20.fitmate.domain.contest.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -12,6 +13,7 @@ import java.util.List;
  * @param schools    학교별 합계. totalReps 큰 순
  * @param topPlayers 한 판 기록 상위 5개. reps 큰 순
  * @param gameCount  측정된 기록이 하나라도 있는 끝난 판 수
+ * @param serverNow  응답을 만든 서버 시각. 판 응답과 같이 모든 챌린지 응답에 넣는다
  */
 public record ContestStandingsResponse(
 
@@ -22,8 +24,19 @@ public record ContestStandingsResponse(
         List<TopPlayer> topPlayers,
 
         @Schema(description = "측정된 기록이 하나라도 있는 끝난 판 수", example = "5")
-        int gameCount
+        int gameCount,
+
+        @Schema(description = "응답을 만든 서버 시각(ISO 8601)", example = "2026-11-13T05:00:00.000Z")
+        String serverNow
 ) {
+
+    /**
+     * 집계 결과와 현재 시각으로 응답을 만든다.
+     */
+    public static ContestStandingsResponse of(List<School> schools, List<TopPlayer> topPlayers, int gameCount,
+                                              Instant now) {
+        return new ContestStandingsResponse(schools, topPlayers, gameCount, ContestTimeFormat.format(now));
+    }
 
     /**
      * 학교 하나의 누적 기록.

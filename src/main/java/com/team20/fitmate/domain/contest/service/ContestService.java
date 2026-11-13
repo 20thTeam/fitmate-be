@@ -181,7 +181,7 @@ public class ContestService {
         int gameCount = (int) finishedGames.stream()
                 .filter(game -> game.getPlayers().stream().anyMatch(ContestPlayer::hasMeasuredResult))
                 .count();
-        return new ContestStandingsResponse(schools, topPlayers, gameCount);
+        return ContestStandingsResponse.of(schools, topPlayers, gameCount, now);
     }
 
     /**

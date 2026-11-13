@@ -176,6 +176,7 @@ class UnivContestControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.resultCode").value("200-1"))
                 .andExpect(jsonPath("$.data.gameCount").value(1))
+                .andExpect(jsonPath("$.data.serverNow").value("2026-11-13T05:00:26.000Z"))
                 // kw는 null 기록뿐이라 빠진다. 0회는 측정된 기록이라 들어간다
                 .andExpect(jsonPath("$.data.schools", hasSize(2)))
                 .andExpect(jsonPath("$.data.schools[0].schoolId").value("seoultech"))
