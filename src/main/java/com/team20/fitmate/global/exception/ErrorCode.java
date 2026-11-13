@@ -83,6 +83,14 @@ public enum ErrorCode {
     /** 공개 파티 식별값이 설정과 다름 */
     PUBLIC_PARTY_NOT_FOUND(HttpStatus.NOT_FOUND, "404-8", "공개 파티를 찾을 수 없습니다."),
 
+    // ===== 학교 대항 스쿼트 챌린지 =====
+
+    /** 챌린지 판이 없음 */
+    CONTEST_GAME_NOT_FOUND(HttpStatus.NOT_FOUND, "404-9", "챌린지 판을 찾을 수 없습니다."),
+
+    /** playerId가 그 판에 들어온 사람이 아님 */
+    CONTEST_PLAYER_NOT_FOUND(HttpStatus.NOT_FOUND, "404-10", "이 판에 참가한 기록을 찾을 수 없습니다."),
+
     // ===== 운동 기록 (충돌) =====
 
     /** 이미 종료된 운동 기록에 다시 제출함 */
@@ -95,7 +103,10 @@ public enum ErrorCode {
     WORKOUT_NOT_FINISHED(HttpStatus.CONFLICT, "409-3", "아직 종료되지 않은 운동 기록입니다."),
 
     /** 공개 파티가 열려 있지 않은 시간에 입장하려 함 */
-    PUBLIC_PARTY_CLOSED(HttpStatus.CONFLICT, "409-4", "공개 파티가 지금 열려 있지 않습니다.");
+    PUBLIC_PARTY_CLOSED(HttpStatus.CONFLICT, "409-4", "공개 파티가 지금 열려 있지 않습니다."),
+
+    /** 아직 시작하지 않은 챌린지 판에 결과를 냄 */
+    CONTEST_GAME_NOT_STARTED(HttpStatus.CONFLICT, "409-5", "아직 시작하지 않은 챌린지 판입니다.");
 
     /** 응답 HTTP 상태 */
     private final HttpStatus status;
