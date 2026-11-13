@@ -12,7 +12,7 @@ import com.team20.fitmate.domain.room.repository.RoomRepository;
 import com.team20.fitmate.domain.room.repository.TeamRepository;
 import com.team20.fitmate.global.exception.CustomException;
 import com.team20.fitmate.global.exception.ErrorCode;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,13 +22,23 @@ import java.util.List;
  * 운동방 조회·만들기와 입장·나가기(참가자 연결)를 맡는 서비스.
  */
 @Service
-@RequiredArgsConstructor
 public class RoomService {
 
     private final RoomRepository roomRepository;
     private final TeamRepository teamRepository;
     private final ParticipantService participantService;
     private final RoomProperties roomProperties;
+    private final ObjectProvider<RoomOccupancy> occupancy;
+
+    public RoomService(RoomRepository roomRepository, TeamRepository teamRepository,
+                       ParticipantService participantService, RoomProperties roomProperties,
+                       ObjectProvider<RoomOccupancy> occupancy) {
+        this.roomRepository = roomRepository;
+        this.teamRepository = teamRepository;
+        this.participantService = participantService;
+        this.roomProperties = roomProperties;
+        this.occupancy = occupancy;
+    }
 
     /**
      * 모든 운동방을 만든 순서대로 조회한다. 첫 번째가 지정 운동방이다.
@@ -36,7 +46,7 @@ public class RoomService {
     @Transactional(readOnly = true)
     public List<RoomResponse> getAll() {
         return roomRepository.findAllByOrderByIdAsc().stream()
-                .map(RoomResponse::from)
+                .map(this::toResponse)
                 .toList();
     }
 
@@ -45,7 +55,7 @@ public class RoomService {
      */
     @Transactional(readOnly = true)
     public RoomResponse get(Long roomId) {
-        return RoomResponse.from(findById(roomId));
+        return toResponse(findById(roomId));
     }
 
     /**
@@ -58,7 +68,7 @@ public class RoomService {
         Participant participant = participantService.findByClientToken(clientToken);
         Room room = findById(roomId);
         participant.enterRoom(room);
-        return RoomResponse.from(room);
+        return toResponse(room);
     }
 
     /**
@@ -79,7 +89,7 @@ public class RoomService {
         String name = request.name().strip();
         Team team = teamRepository.save(Team.create(RoomDataInitializer.teamNameOf(name)));
         Room room = roomRepository.save(Room.create(team, name, roomProperties.capacity()));
-        return RoomResponse.from(room);
+        return toResponse(room);
     }
 
     /**
@@ -109,5 +119,11 @@ public class RoomService {
     public Room findById(Long roomId) {
         return roomRepository.findById(roomId)
                 .orElseThrow(() -> new CustomException(ErrorCode.ROOM_NOT_FOUND));
+    }
+
+    /** 운동방과 지금 실시간 인원으로 응답을 만든다. 실시간 계층이 없으면(단독 테스트 등) 0명으로 본다 */
+    private RoomResponse toResponse(Room room) {
+        RoomOccupancy counter = occupancy.getIfAvailable();
+        return RoomResponse.of(room, counter == null ? 0 : counter.countRoomParticipants(room.getId()));
     }
 }
