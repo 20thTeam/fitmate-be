@@ -3,6 +3,7 @@ package com.team20.fitmate.domain.contest.service;
 import com.team20.fitmate.domain.contest.dto.ContestGameResponse;
 import com.team20.fitmate.domain.contest.dto.ContestJoinRequest;
 import com.team20.fitmate.domain.contest.dto.ContestJoinResponse;
+import com.team20.fitmate.domain.contest.dto.ContestSeat;
 import com.team20.fitmate.domain.contest.dto.ContestStandingsResponse;
 import com.team20.fitmate.domain.contest.entity.ContestGame;
 import com.team20.fitmate.domain.contest.entity.ContestGameStatus;
@@ -17,10 +18,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
@@ -182,6 +186,35 @@ public class ContestService {
                 .filter(game -> game.getPlayers().stream().anyMatch(ContestPlayer::hasMeasuredResult))
                 .count();
         return ContestStandingsResponse.of(schools, topPlayers, gameCount, now);
+    }
+
+    /**
+     * 실시간 입장(/ws JOIN)할 판 참가 정보를 찾는다. 판의 참가자인지만 확인하고, 끝났는지는 값으로 돌려준다.
+     *
+     * @throws CustomException 판이 없으면 {@link ErrorCode#CONTEST_GAME_NOT_FOUND},
+     *                         그 판에 들어온 사람이 아니면(나갔거나 다른 판) {@link ErrorCode#CONTEST_PLAYER_NOT_FOUND}
+     */
+    @Transactional(readOnly = true)
+    public ContestSeat findSeat(Long gameId, Long playerId) {
+        ContestGame game = findGame(gameId);
+        ContestPlayer player = requirePlayer(game, playerId);
+        boolean finished = game.statusAt(now()) == ContestGameStatus.FINISHED;
+        return new ContestSeat(game.getId(), player.getId(), player.getNickname(), ContestGame.MAX_PLAYERS, finished);
+    }
+
+    /**
+     * 주어진 판 중 끝났거나(FINISHED) 없어진 판의 식별값을 돌려준다. 실시간 계층이 연결을 정리할 판을 고를 때 쓴다.
+     */
+    @Transactional(readOnly = true)
+    public Set<Long> findClosedGameIds(Collection<Long> gameIds) {
+        Instant now = now();
+        Set<Long> closed = new HashSet<>(gameIds);
+        for (ContestGame game : gameRepository.findAllById(gameIds)) {
+            if (game.statusAt(now) != ContestGameStatus.FINISHED) {
+                closed.remove(game.getId());
+            }
+        }
+        return closed;
     }
 
     /**

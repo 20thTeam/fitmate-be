@@ -87,6 +87,7 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
     /**
      * JOIN: 형식을 검사하고 DB로 참가자·운동방·입장 여부를 확인한 뒤 방에 넣는다.
      * {@code partyId}로 오면 공개 파티(이슈 #11)로 보고 오픈 상태를 확인한다.
+     * {@code contestGameId}로 오면 챌린지 판(이슈 #34)으로 보고 playerId가 그 판의 참가자인지 확인한다.
      * DB 확인은 레지스트리 잠금 밖에서 한다.
      */
     private void handleJoin(String sessionId, JsonNode payload) {
@@ -97,9 +98,14 @@ public class RoomWebSocketHandler extends TextWebSocketHandler {
         if (join == null || !join.hasValidFormat()) {
             throw new RealtimeException(RealtimeErrorCode.INVALID_MESSAGE);
         }
-        JoinTicket ticket = join.targetsPublicParty()
-                ? joinValidator.validatePublicParty(join.token(), join.partyId())
-                : joinValidator.validate(join.token(), join.roomId());
+        JoinTicket ticket;
+        if (join.targetsContestGame()) {
+            ticket = joinValidator.validateContestGame(join.contestGameId(), join.playerId());
+        } else if (join.targetsPublicParty()) {
+            ticket = joinValidator.validatePublicParty(join.token(), join.partyId());
+        } else {
+            ticket = joinValidator.validate(join.token(), join.roomId());
+        }
         registry.join(sessionId, ticket);
     }
 
