@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.time.DayOfWeek;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
@@ -114,6 +115,40 @@ class PublicPartyScheduleTest {
         assertThatThrownBy(() -> new PublicPartyProperties(1L, "선셋", "Asia/Seoul", "22:00", "23:00", List.of("FUNDAY")))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new PublicPartyProperties(0L, "선셋", "Asia/Seoul", "22:00", "23:00", null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    @DisplayName("운영 시간(분)으로 만들면 자정을 넘겨 닫는다: 23:30부터 90분이면 00:50에 열려 있고 01:00에 닫힌다")
+    void durationOverMidnight() {
+        PublicPartySchedule schedule = new PublicPartySchedule(
+                SEOUL, LocalTime.of(23, 30), Duration.ofMinutes(90), EnumSet.allOf(DayOfWeek.class));
+
+        PartyWindow window = schedule.windowAt(seoul("2026-11-12T00:50:00"));
+
+        assertThat(window.open()).isTrue();
+        assertThat(window.opensAt().toOffsetDateTime()).isEqualTo(OffsetDateTime.parse("2026-11-11T23:30+09:00"));
+        assertThat(window.closesAt().toOffsetDateTime()).isEqualTo(OffsetDateTime.parse("2026-11-12T01:00+09:00"));
+        assertThat(schedule.windowAt(seoul("2026-11-12T01:00:00")).open()).isFalse();
+    }
+
+    @Test
+    @DisplayName("다음 구간은 지금 열려 있으면 그다음 날, 닫혀 있으면 오늘 구간이다")
+    void nextWindowAfter() {
+        assertThat(daily.nextWindowAfter(seoul("2026-11-11T22:30:00")).opensAt().toOffsetDateTime())
+                .isEqualTo(OffsetDateTime.parse("2026-11-12T22:00+09:00"));
+        assertThat(daily.nextWindowAfter(seoul("2026-11-11T21:00:00")).opensAt().toOffsetDateTime())
+                .isEqualTo(OffsetDateTime.parse("2026-11-11T22:00+09:00"));
+    }
+
+    @Test
+    @DisplayName("운영 시간이 0이거나 하루 이상이면 만들 수 없다")
+    void invalidDuration() {
+        assertThatThrownBy(() -> new PublicPartySchedule(
+                SEOUL, LocalTime.of(22, 0), Duration.ZERO, EnumSet.allOf(DayOfWeek.class)))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new PublicPartySchedule(
+                SEOUL, LocalTime.of(22, 0), Duration.ofDays(1), EnumSet.allOf(DayOfWeek.class)))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 }
