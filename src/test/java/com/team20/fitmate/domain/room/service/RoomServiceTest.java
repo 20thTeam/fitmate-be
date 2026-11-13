@@ -3,7 +3,10 @@ package com.team20.fitmate.domain.room.service;
 import com.team20.fitmate.domain.participant.dto.ParticipantCreateRequest;
 import com.team20.fitmate.domain.participant.dto.ParticipantResponse;
 import com.team20.fitmate.domain.participant.service.ParticipantService;
+import com.team20.fitmate.domain.room.config.RoomProperties;
+import com.team20.fitmate.domain.room.dto.RoomCreateRequest;
 import com.team20.fitmate.domain.room.dto.RoomResponse;
+import com.team20.fitmate.domain.room.init.RoomDataInitializer;
 import com.team20.fitmate.global.exception.CustomException;
 import com.team20.fitmate.global.exception.ErrorCode;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,8 +23,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * {@link RoomService}의 지정 운동방 조회와 입장을 확인하는 테스트.
- * 지정 운동방은 서버 시작 때 초기 데이터로 하나 만들어진다.
+ * {@link RoomService}의 운동방 조회·만들기와 입장·나가기를 확인하는 테스트.
+ * 지정 운동방과 시연용 운동방은 서버 시작 때 초기 데이터로 만들어진다.
  */
 @SpringBootTest
 @Transactional
@@ -32,6 +35,12 @@ class RoomServiceTest {
 
     @Autowired
     private ParticipantService participantService;
+
+    @Autowired
+    private RoomProperties roomProperties;
+
+    @Autowired
+    private RoomDataInitializer roomDataInitializer;
 
     private RoomResponse designatedRoom;
 
@@ -46,11 +55,9 @@ class RoomServiceTest {
     }
 
     @Test
-    @DisplayName("지정 운동방 하나가 팀과 정원 5명으로 준비되어 있다")
+    @DisplayName("지정 운동방이 첫 번째로 팀과 정원 5명으로 준비되어 있다")
     void designatedRoomExists() {
-        List<RoomResponse> rooms = roomService.getAll();
-
-        assertThat(rooms).hasSize(1);
+        assertThat(designatedRoom.name()).isEqualTo("FITMATE 운동방");
         assertThat(designatedRoom.capacity()).isEqualTo(5);
         assertThat(designatedRoom.teamId()).isNotNull();
         assertThat(designatedRoom.teamName()).isNotBlank();
@@ -129,5 +136,109 @@ class RoomServiceTest {
                 .isInstanceOf(CustomException.class)
                 .extracting(e -> ((CustomException) e).getErrorCode())
                 .isEqualTo(ErrorCode.PARTICIPANT_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("시연용 운동방이 지정 운동방과 함께 준비되고, 방마다 팀과 이름이 다르다")
+    void seededRoomsHaveOwnTeams() {
+        List<RoomResponse> rooms = roomService.getAll();
+
+        assertThat(rooms).hasSize(1 + roomProperties.seedCount());
+        assertThat(rooms).extracting(RoomResponse::name).contains("운동방 1", "운동방 " + roomProperties.seedCount());
+        assertThat(rooms).extracting(RoomResponse::name).doesNotHaveDuplicates();
+        assertThat(rooms).extracting(RoomResponse::teamId).doesNotHaveDuplicates();
+        assertThat(rooms).allSatisfy(room -> assertThat(room.capacity()).isEqualTo(5));
+    }
+
+    @Test
+    @DisplayName("서버를 다시 시작해도(초기화를 다시 돌려도) 운동방이 또 생기지 않는다")
+    void seedingIsIdempotent() {
+        int before = roomService.getAll().size();
+
+        roomDataInitializer.run(null);
+
+        assertThat(roomService.getAll()).hasSize(before);
+    }
+
+    @Test
+    @DisplayName("운동방을 만들면 새 팀과 함께 목록에 나오고, 그 방에 입장할 수 있다")
+    void createRoom() {
+        String token = createParticipant("민지");
+
+        RoomResponse created = roomService.create(token, new RoomCreateRequest("  민지의 운동방  "));
+
+        assertThat(created.name()).isEqualTo("민지의 운동방");
+        assertThat(created.capacity()).isEqualTo(5);
+        assertThat(created.teamName()).isEqualTo("민지의 운동방 팀");
+        assertThat(roomService.getAll()).extracting(RoomResponse::teamId)
+                .doesNotHaveDuplicates()
+                .contains(created.teamId());
+        assertThat(roomService.enter(token, created.roomId()).roomId()).isEqualTo(created.roomId());
+    }
+
+    @Test
+    @DisplayName("운동방 수가 상한이면 더 만들 수 없다")
+    void createRoomOverLimit() {
+        String token = createParticipant("민지");
+        int remaining = roomProperties.maxCount() - roomService.getAll().size();
+        IntStream.range(0, remaining).forEach(i -> roomService.create(token, new RoomCreateRequest("방" + i)));
+
+        assertThatThrownBy(() -> roomService.create(token, new RoomCreateRequest("하나 더")))
+                .isInstanceOf(CustomException.class)
+                .extracting(e -> ((CustomException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ROOM_LIMIT_EXCEEDED);
+    }
+
+    @Test
+    @DisplayName("없는 토큰으로는 운동방을 만들 수 없다")
+    void createRoomWithUnknownToken() {
+        assertThatThrownBy(() -> roomService.create("없는-토큰", new RoomCreateRequest("방")))
+                .isInstanceOf(CustomException.class)
+                .extracting(e -> ((CustomException) e).getErrorCode())
+                .isEqualTo(ErrorCode.PARTICIPANT_NOT_FOUND);
+    }
+
+    @Test
+    @DisplayName("운동방에서 나가면 참가자의 roomId가 null이 된다")
+    void leave() {
+        String token = createParticipant("아현");
+        roomService.enter(token, designatedRoom.roomId());
+
+        roomService.leave(token, designatedRoom.roomId());
+
+        assertThat(participantService.getByClientToken(token).roomId()).isNull();
+    }
+
+    @Test
+    @DisplayName("다른 방에 들어가 있으면 나가기를 해도 그 방 입장 기록을 지우지 않는다")
+    void leaveOtherRoomKeepsCurrentRoom() {
+        String token = createParticipant("아현");
+        RoomResponse other = roomService.getAll().get(1);
+        roomService.enter(token, other.roomId());
+
+        roomService.leave(token, designatedRoom.roomId());
+
+        assertThat(participantService.getByClientToken(token).roomId()).isEqualTo(other.roomId());
+    }
+
+    @Test
+    @DisplayName("입장 전에 나가기를 해도 성공한다")
+    void leaveWithoutEntering() {
+        String token = createParticipant("아현");
+
+        roomService.leave(token, designatedRoom.roomId());
+
+        assertThat(participantService.getByClientToken(token).roomId()).isNull();
+    }
+
+    @Test
+    @DisplayName("없는 운동방에서 나가면 ROOM_NOT_FOUND 예외가 난다")
+    void leaveUnknownRoom() {
+        String token = createParticipant("아현");
+
+        assertThatThrownBy(() -> roomService.leave(token, 999999L))
+                .isInstanceOf(CustomException.class)
+                .extracting(e -> ((CustomException) e).getErrorCode())
+                .isEqualTo(ErrorCode.ROOM_NOT_FOUND);
     }
 }
