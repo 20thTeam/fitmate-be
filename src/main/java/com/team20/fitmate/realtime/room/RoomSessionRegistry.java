@@ -2,6 +2,7 @@ package com.team20.fitmate.realtime.room;
 
 import com.team20.fitmate.domain.cheer.dto.CheerRecordCommand;
 import com.team20.fitmate.domain.party.service.PublicPartyOccupancy;
+import com.team20.fitmate.domain.room.service.RoomOccupancy;
 import com.team20.fitmate.realtime.message.CheerPayload;
 import com.team20.fitmate.realtime.message.ConnectionPayload;
 import com.team20.fitmate.realtime.message.ErrorPayload;
@@ -50,7 +51,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
-public class RoomSessionRegistry implements PublicPartyOccupancy {
+public class RoomSessionRegistry implements PublicPartyOccupancy, RoomOccupancy {
 
     /**
      * 응답 대기 시간 동안 메시지가 없어 닫을 때 쓰는 닫힘 상태(코드 4500).
@@ -408,6 +409,17 @@ public class RoomSessionRegistry implements PublicPartyOccupancy {
         synchronized (lock) {
             RoomState room = rooms.get(space);
             return room == null ? List.of() : room.views();
+        }
+    }
+
+    /**
+     * 친구 운동방의 현재 참가자 수(연결 불안정 포함). 정원 판단과 같은 기준이다. 운동방 조회 API가 쓴다(이슈 #36).
+     */
+    @Override
+    public int countRoomParticipants(Long roomId) {
+        synchronized (lock) {
+            RoomState room = rooms.get(SpaceKey.room(roomId));
+            return room == null ? 0 : room.presences.size();
         }
     }
 
