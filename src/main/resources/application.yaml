@@ -12,6 +12,14 @@ cors:
 admin:
   key: ${ADMIN_KEY:}
 
+# 친구 운동방(이슈 #36). 모두 시연용 임시값이다.
+# 서버 시작 때 지정 운동방(FITMATE 운동방) 외에 `운동방 1` ~ `운동방 {seed-count}`를 이름 기준으로 없을 때만 만든다.
+# max-count는 지정·시연용·참가자가 만든 방을 모두 합친 상한이다(프론트 임시 상한 20개와 맞춤).
+room:
+  seed-count: ${ROOM_SEED_COUNT:10}
+  max-count: ${ROOM_MAX_COUNT:20}
+  capacity: 5
+
 # 운동방 실시간 연결(/ws) 시간 설정. 모두 임시값이며 다중 PC 테스트 후 PM 승인을 받아 바꾼다.
 realtime:
   join-timeout: 10s        # 연결 후 JOIN을 기다리는 시간

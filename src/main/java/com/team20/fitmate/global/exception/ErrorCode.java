@@ -106,7 +106,12 @@ public enum ErrorCode {
     PUBLIC_PARTY_CLOSED(HttpStatus.CONFLICT, "409-4", "공개 파티가 지금 열려 있지 않습니다."),
 
     /** 아직 시작하지 않은 챌린지 판에 결과를 냄 */
-    CONTEST_GAME_NOT_STARTED(HttpStatus.CONFLICT, "409-5", "아직 시작하지 않은 챌린지 판입니다.");
+    CONTEST_GAME_NOT_STARTED(HttpStatus.CONFLICT, "409-5", "아직 시작하지 않은 챌린지 판입니다."),
+
+    // ===== 운동방 (충돌) =====
+
+    /** 서버 전체 운동방 수가 상한(room.max-count)에 닿아 더 만들 수 없음 */
+    ROOM_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "409-6", "더 이상 운동방을 만들 수 없습니다.");
 
     /** 응답 HTTP 상태 */
     private final HttpStatus status;
