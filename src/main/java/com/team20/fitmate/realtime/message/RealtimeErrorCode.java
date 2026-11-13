@@ -37,6 +37,15 @@ public enum RealtimeErrorCode {
     /** 공개 파티가 열려 있지 않은 시간에 입장하려 함(이슈 #11) */
     PUBLIC_PARTY_CLOSED("공개 파티가 지금 열려 있지 않습니다.", true),
 
+    /** 챌린지 판이 없음(이슈 #34) */
+    CONTEST_GAME_NOT_FOUND("챌린지 판을 찾을 수 없습니다.", true),
+
+    /** playerId가 그 챌린지 판의 참가자가 아님(나갔거나 다른 판) */
+    CONTEST_PLAYER_NOT_FOUND("이 판에 참가한 기록을 찾을 수 없습니다.", true),
+
+    /** 이미 끝난(FINISHED) 챌린지 판에 입장하려 함 */
+    CONTEST_GAME_FINISHED("이미 끝난 챌린지 판입니다.", true),
+
     /** 정원이 찼음 */
     ROOM_FULL("운동방 정원이 가득 찼습니다.", true),
 
