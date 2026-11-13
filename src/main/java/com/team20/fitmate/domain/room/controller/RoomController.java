@@ -88,12 +88,12 @@ public class RoomController {
     @Operation(summary = "운동방 만들기",
             description = "이름(1~20자, 중복 허용)으로 정원 5명인 운동방과 그 팀을 만든다. "
                     + "만든 사람을 입장시키지는 않으므로 이어서 입장 API를 부른다. "
-                    + "서버 전체 운동방 수가 상한(임시 20개)이면 409-5.")
+                    + "서버 전체 운동방 수가 상한(임시 20개)이면 409-6.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "200-1 만들기 성공"),
             @ApiResponse(responseCode = "400", description = "400-1 이름 누락·20자 초과, 400-2 본문 오류, 400-3 토큰 헤더 누락"),
             @ApiResponse(responseCode = "404", description = "404-2 참가자 없음"),
-            @ApiResponse(responseCode = "409", description = "409-5 운동방 수 상한 초과")
+            @ApiResponse(responseCode = "409", description = "409-6 운동방 수 상한 초과")
     })
     @PostMapping
     public RsData<RoomResponse> create(

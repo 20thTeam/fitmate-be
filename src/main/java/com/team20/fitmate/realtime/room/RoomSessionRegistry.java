@@ -30,6 +30,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * 운동방별 참가자 상태와 연결을 메모리에서 관리하고, 같은 방에 이벤트를 전달한다.
@@ -41,6 +43,7 @@ import java.util.Optional;
  *     <li>연결이 끊기면 바로 퇴장시키지 않고 연결 불안정으로 표시한 뒤 재접속 대기 시간 동안 자리를 남긴다.</li>
  *     <li>정원은 DB가 아니라 이 레지스트리의 현재 참가자 수(연결 불안정 포함)로 판단한다.</li>
  *     <li>친구 파티 운동방과 공개 파티(이슈 #11)는 같은 경로를 쓴다. 공개 파티는 정원이 없고, 응원은 전달만 하고 저장하지 않는다.</li>
+ *     <li>챌린지 판(이슈 #34)도 같은 경로를 쓴다. 정원은 판의 maxPlayers이고, 판이 끝나면 {@link #closeContestGame(Long)}으로 정리한다.</li>
  * </ul>
  * 모든 상태 변경은 하나의 잠금 안에서 일어난다. 시연 규모(방 하나, 5명 안팎)에서는 이 단순함이 더 중요하다.
  * 메시지 전송은 연결마다 {@code ConcurrentWebSocketSessionDecorator}로 감싸 두어 잠금 안에서 보내도 오래 막히지 않는다.
@@ -67,7 +70,10 @@ public class RoomSessionRegistry implements PublicPartyOccupancy {
     /** 연결 식별값 → 연결. JOIN 전 연결도 여기 있다 */
     private final Map<String, Connection> connections = new HashMap<>();
 
-    /** 실시간 방(운동방·공개 파티) → 방 상태. 참가자가 한 명도 없으면 지운다 */
+    /** 끝난 챌린지 판의 연결을 닫을 때 쓰는 닫힘 상태(정상 종료 1000, 사유 CONTEST_GAME_FINISHED) */
+    static final CloseStatus CONTEST_GAME_FINISHED = CloseStatus.NORMAL.withReason("CONTEST_GAME_FINISHED");
+
+    /** 실시간 방(운동방·공개 파티·챌린지 판) → 방 상태. 참가자가 한 명도 없으면 지운다 */
     private final Map<SpaceKey, RoomState> rooms = new HashMap<>();
 
     public RoomSessionRegistry(RealtimeProperties properties, JsonMapper jsonMapper, Clock clock) {
@@ -271,7 +277,7 @@ public class RoomSessionRegistry implements PublicPartyOccupancy {
             send(target, message(ServerMessageType.CHEER_RECEIVED, room.space, connection.participantId, now, cheer));
             send(connection, message(ServerMessageType.CHEER_SENT, room.space, connection.participantId, now, cheer));
             if (!room.space.isRoom()) {
-                // 공개 파티 응원은 전달만 한다. 응원 저장(cheer 테이블)은 친구 파티 운동방 기준이다
+                // 공개 파티·챌린지 판 응원은 전달만 한다. 응원 저장(cheer 테이블)은 친구 파티 운동방 기준이다
                 return Optional.empty();
             }
             return Optional.of(new CheerRecordCommand(
@@ -417,6 +423,41 @@ public class RoomSessionRegistry implements PublicPartyOccupancy {
     }
 
     /**
+     * 지금 누군가 들어와 있는 챌린지 판 식별값 목록. 끝난 판을 정리하는 스케줄러가 쓴다.
+     */
+    public Set<Long> activeContestGameIds() {
+        synchronized (lock) {
+            return rooms.keySet().stream()
+                    .filter(SpaceKey::isContestGame)
+                    .map(SpaceKey::id)
+                    .collect(Collectors.toSet());
+        }
+    }
+
+    /**
+     * 끝난 챌린지 판의 실시간 방을 정리한다. 남은 참가자를 모두 빼고 연결을 정상 종료(1000, CONTEST_GAME_FINISHED)로 닫는다.
+     * <p>
+     * 판이 끝난 것은 모두가 아는 일이라 PARTICIPANT_LEFT·ERROR는 보내지 않는다. 결과는 프론트가 REST로 조회한다.
+     */
+    public void closeContestGame(Long gameId) {
+        synchronized (lock) {
+            RoomState room = rooms.remove(SpaceKey.contestGame(gameId));
+            if (room == null) {
+                return;
+            }
+            for (RoomPresence presence : room.presences.values()) {
+                if (presence.getSessionId() == null) {
+                    continue;
+                }
+                Connection connection = connections.remove(presence.getSessionId());
+                if (connection != null) {
+                    close(connection, CONTEST_GAME_FINISHED);
+                }
+            }
+        }
+    }
+
+    /**
      * 모든 연결을 닫고 상태를 비운다. 테스트 사이 초기화용이다.
      */
     public void clear() {
@@ -500,12 +541,14 @@ public class RoomSessionRegistry implements PublicPartyOccupancy {
     }
 
     /**
-     * 공통 봉투를 만든다. 친구 파티 운동방이면 roomId, 공개 파티면 partyId를 채운다. 방이 정해지기 전이면 둘 다 null이다.
+     * 공통 봉투를 만든다. 친구 파티 운동방이면 roomId, 공개 파티면 partyId, 챌린지 판이면 contestGameId를 채운다.
+     * 방이 정해지기 전이면 셋 다 null이다.
      */
     private ServerMessage message(ServerMessageType type, SpaceKey space, Long participantId, Instant now, Object payload) {
         Long roomId = space != null && space.isRoom() ? space.id() : null;
-        Long partyId = space != null && !space.isRoom() ? space.id() : null;
-        return new ServerMessage(type, roomId, partyId, participantId, now.toString(), payload);
+        Long partyId = space != null && space.isPublicParty() ? space.id() : null;
+        Long contestGameId = space != null && space.isContestGame() ? space.id() : null;
+        return new ServerMessage(type, roomId, partyId, contestGameId, participantId, now.toString(), payload);
     }
 
     /** 한 연결로 보낸다 */
