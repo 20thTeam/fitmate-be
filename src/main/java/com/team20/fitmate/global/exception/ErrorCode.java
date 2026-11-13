@@ -95,7 +95,12 @@ public enum ErrorCode {
     WORKOUT_NOT_FINISHED(HttpStatus.CONFLICT, "409-3", "아직 종료되지 않은 운동 기록입니다."),
 
     /** 공개 파티가 열려 있지 않은 시간에 입장하려 함 */
-    PUBLIC_PARTY_CLOSED(HttpStatus.CONFLICT, "409-4", "공개 파티가 지금 열려 있지 않습니다.");
+    PUBLIC_PARTY_CLOSED(HttpStatus.CONFLICT, "409-4", "공개 파티가 지금 열려 있지 않습니다."),
+
+    // ===== 운동방 (충돌) =====
+
+    /** 서버 전체 운동방 수가 상한(room.max-count)에 닿아 더 만들 수 없음 */
+    ROOM_LIMIT_EXCEEDED(HttpStatus.CONFLICT, "409-5", "더 이상 운동방을 만들 수 없습니다.");
 
     /** 응답 HTTP 상태 */
     private final HttpStatus status;

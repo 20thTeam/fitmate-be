@@ -71,4 +71,11 @@ public class Participant extends BaseTimeEntity {
     public void enterRoom(Room room) {
         this.room = room;
     }
+
+    /**
+     * 운동방에서 나간다. 이후 마지막 입장 방이 없어져, 다음에는 방을 다시 고른다.
+     */
+    public void leaveRoom() {
+        this.room = null;
+    }
 }
