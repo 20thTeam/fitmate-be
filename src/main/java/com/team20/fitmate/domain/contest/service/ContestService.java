@@ -6,6 +6,7 @@ import com.team20.fitmate.domain.contest.dto.ContestJoinResponse;
 import com.team20.fitmate.domain.contest.dto.ContestResetResponse;
 import com.team20.fitmate.domain.contest.dto.ContestSeat;
 import com.team20.fitmate.domain.contest.dto.ContestStandingsResponse;
+import com.team20.fitmate.domain.contest.dto.ContestTrendResponse;
 import com.team20.fitmate.domain.contest.entity.ContestGame;
 import com.team20.fitmate.domain.contest.entity.ContestGameStatus;
 import com.team20.fitmate.domain.contest.entity.ContestPlayer;
@@ -19,8 +20,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -44,6 +50,12 @@ public class ContestService {
 
     /** 현황에 보여줄 한 판 기록 수 */
     static final int TOP_PLAYER_LIMIT = 5;
+
+    /** 추이를 나누는 시간대. 시연장 시각(한국 시간) 기준으로 1시간씩 자른다 */
+    static final ZoneId TREND_ZONE = ZoneId.of("Asia/Seoul");
+
+    /** 추이에 돌려줄 최대 구간 수(최근 24시간). 그보다 오래된 기록은 첫 구간 누적에 들어간다 */
+    static final int TREND_MAX_BUCKETS = 24;
 
     private final ContestGameRepository gameRepository;
     private final Clock clock;
@@ -147,6 +159,7 @@ public class ContestService {
      *     <li>schools: 학교별 횟수 합계와 기록 수. 합계 큰 순, 같으면 학교 식별값 순</li>
      *     <li>topPlayers: 한 판 기록 상위 5개. 횟수 큰 순, 같으면 먼저 들어온 기록 순</li>
      *     <li>gameCount: 측정된 기록이 하나라도 있는 끝난 판 수</li>
+     *     <li>players: 참가자별 최고 기록 전체(이슈 #43). 최고 기록 큰 순, 같으면 처음 기록한 순</li>
      * </ul>
      */
     @Transactional(readOnly = true)
@@ -186,7 +199,89 @@ public class ContestService {
         int gameCount = (int) finishedGames.stream()
                 .filter(game -> game.getPlayers().stream().anyMatch(ContestPlayer::hasMeasuredResult))
                 .count();
-        return ContestStandingsResponse.of(schools, topPlayers, gameCount, now);
+        // 참가자별 최고 기록. 닉네임·학교가 같으면 한 사람으로 본다(로그인 없이 참가하므로)
+        Map<List<String>, int[]> byPlayer = new LinkedHashMap<>();
+        for (ContestPlayer player : measured) {
+            int[] best = byPlayer.computeIfAbsent(List.of(player.getNickname(), player.getSchoolId()),
+                    key -> new int[]{Integer.MIN_VALUE, 0});
+            best[0] = Math.max(best[0], player.getReps());
+            best[1]++;
+        }
+        List<ContestStandingsResponse.Player> players = byPlayer.entrySet().stream()
+                .map(entry -> new ContestStandingsResponse.Player(entry.getKey().get(0), entry.getKey().get(1),
+                        entry.getValue()[0], entry.getValue()[1]))
+                .sorted(Comparator.comparingInt(ContestStandingsResponse.Player::bestReps).reversed())
+                .toList();
+        return ContestStandingsResponse.of(schools, topPlayers, gameCount, players, now);
+    }
+
+    /**
+     * 학교별 누적 기록·순위의 1시간 단위 추이를 집계한다 (이슈 #43). 기준은 {@link #getStandings()}와 같다.
+     * <ul>
+     *     <li>판은 시작 시각(startAt)이 속한 한국 시간 1시간 구간에 넣는다</li>
+     *     <li>구간은 첫 판의 시간부터 지금 시간까지 빠짐없이 만든다. 판이 없던 시간은 앞 구간 누적을 그대로 잇는다</li>
+     *     <li>최근 {@value #TREND_MAX_BUCKETS}개 구간만 돌려주고, 그보다 오래된 기록은 첫 구간 누적에 포함한다</li>
+     *     <li>순위는 누적 큰 순, 같으면 학교 식별값 순이라 겹치지 않는다. 마지막 구간 순서는 standings의 schools와 같다</li>
+     * </ul>
+     */
+    @Transactional(readOnly = true)
+    public ContestTrendResponse getTrend() {
+        Instant now = now();
+        Map<Instant, Map<String, Long>> repsByHour = new HashMap<>();
+        for (ContestGame game : gameRepository.findStartedGamesWithPlayers()) {
+            if (game.statusAt(now) != ContestGameStatus.FINISHED) {
+                continue;
+            }
+            Instant hourStart = hourStart(game.getStartAt());
+            for (ContestPlayer player : game.getPlayers()) {
+                if (player.hasMeasuredResult()) {
+                    repsByHour.computeIfAbsent(hourStart, key -> new HashMap<>())
+                            .merge(player.getSchoolId(), (long) player.getReps(), Long::sum);
+                }
+            }
+        }
+        if (repsByHour.isEmpty()) {
+            return ContestTrendResponse.of(List.of(), now);
+        }
+
+        Instant lastHour = hourStart(now);
+        Instant firstHour = repsByHour.keySet().stream().min(Comparator.naturalOrder()).orElseThrow();
+        Instant windowStart = lastHour.minus(TREND_MAX_BUCKETS - 1L, ChronoUnit.HOURS);
+        if (firstHour.isBefore(windowStart)) {
+            firstHour = windowStart;
+        }
+
+        Map<String, Long> totals = new HashMap<>();
+        // 창보다 오래된 기록은 첫 구간 누적에 미리 더한다
+        Instant cutoff = firstHour;
+        repsByHour.forEach((hour, bySchool) -> {
+            if (hour.isBefore(cutoff)) {
+                bySchool.forEach((schoolId, reps) -> totals.merge(schoolId, reps, Long::sum));
+            }
+        });
+
+        List<ContestTrendResponse.Bucket> buckets = new ArrayList<>();
+        for (Instant hour = firstHour; !hour.isAfter(lastHour); hour = hour.plus(1, ChronoUnit.HOURS)) {
+            Map<String, Long> added = repsByHour.getOrDefault(hour, Map.of());
+            added.forEach((schoolId, reps) -> totals.merge(schoolId, reps, Long::sum));
+            List<String> ranked = totals.keySet().stream()
+                    .sorted(Comparator.comparing((String schoolId) -> totals.get(schoolId)).reversed()
+                            .thenComparing(Comparator.naturalOrder()))
+                    .toList();
+            List<ContestTrendResponse.SchoolPoint> points = new ArrayList<>();
+            for (int i = 0; i < ranked.size(); i++) {
+                String schoolId = ranked.get(i);
+                points.add(new ContestTrendResponse.SchoolPoint(
+                        schoolId, totals.get(schoolId), added.getOrDefault(schoolId, 0L), i + 1));
+            }
+            buckets.add(ContestTrendResponse.Bucket.of(hour, hour.atZone(TREND_ZONE).getHour(), points));
+        }
+        return ContestTrendResponse.of(buckets, now);
+    }
+
+    /** 시각이 속한 한국 시간 1시간 구간의 시작 시각 */
+    private static Instant hourStart(Instant instant) {
+        return ZonedDateTime.ofInstant(instant, TREND_ZONE).truncatedTo(ChronoUnit.HOURS).toInstant();
     }
 
     /**

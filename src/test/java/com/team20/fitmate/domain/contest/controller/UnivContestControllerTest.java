@@ -188,7 +188,23 @@ class UnivContestControllerTest {
                 .andExpect(jsonPath("$.data.topPlayers[0].nickname").value("민준"))
                 .andExpect(jsonPath("$.data.topPlayers[0].reps").value(21))
                 .andExpect(jsonPath("$.data.topPlayers[1].nickname").value("지호"))
-                .andExpect(jsonPath("$.data.topPlayers[2].reps").value(0));
+                .andExpect(jsonPath("$.data.topPlayers[2].reps").value(0))
+                // 참가자별 최고 기록 (null 기록인 하은은 빠진다)
+                .andExpect(jsonPath("$.data.players", hasSize(3)))
+                .andExpect(jsonPath("$.data.players[0].nickname").value("민준"))
+                .andExpect(jsonPath("$.data.players[0].bestReps").value(21))
+                .andExpect(jsonPath("$.data.players[0].entryCount").value(1));
+    }
+
+    @Test
+    @DisplayName("players: 같은 닉네임·학교가 여러 판 하면 한 사람으로 묶고 최고 기록을 쓴다")
+    void playersGroupBestRecord() throws Exception {
+        playGame(new String[]{"seoultech"}, new int[]{5});
+        playGame(new String[]{"seoultech"}, new int[]{9});
+        standings().andExpect(jsonPath("$.data.players", hasSize(1)))
+                .andExpect(jsonPath("$.data.players[0].nickname").value("seoultech0"))
+                .andExpect(jsonPath("$.data.players[0].bestReps").value(9))
+                .andExpect(jsonPath("$.data.players[0].entryCount").value(2));
     }
 
     @Test
@@ -339,6 +355,85 @@ class UnivContestControllerTest {
                 .andExpect(jsonPath("$.paths['/api/univ-contest/games/{gameId}/start'].post.summary").value("판 시작"))
                 .andExpect(jsonPath("$.paths['/api/univ-contest/games/{gameId}/result'].post.summary").value("결과 제출"))
                 .andExpect(jsonPath("$.paths['/api/univ-contest/games/{gameId}/leave'].post.summary").value("판 나가기"));
+    }
+
+    @Test
+    @DisplayName("추이: 기록이 없으면 buckets가 빈 목록이다")
+    void trendEmpty() throws Exception {
+        trend().andExpect(status().isOk())
+                .andExpect(jsonPath("$.resultCode").value("200-1"))
+                .andExpect(jsonPath("$.data.buckets", hasSize(0)))
+                .andExpect(jsonPath("$.data.serverNow").value("2026-11-13T05:00:00.000Z"));
+    }
+
+    @Test
+    @DisplayName("추이: 한국 시간 1시간 구간으로 나누고, 빈 시간은 앞 누적을 잇고, 순위가 바뀌는 것을 보여준다")
+    void trendBucketsByKstHour() throws Exception {
+        // 기준 05:00Z = 14:00 KST. 14시에 seoultech 10, khu 6
+        playGame(new String[]{"seoultech", "khu"}, new int[]{10, 6});
+        // 16시(2시간 뒤)에 khu 8 → khu 14로 1위
+        clock.set(ContestTestClock.BASE.plus(Duration.ofHours(2)).plusSeconds(60));
+        playGame(new String[]{"khu"}, new int[]{8});
+        // 17시: 끝나지 않은 판은 빠진다
+        clock.set(ContestTestClock.BASE.plus(Duration.ofHours(3)).plusSeconds(60));
+        String body = join("진행중", "kw").andReturn().getResponse().getContentAsString();
+        start(JsonPath.read(body, "$.data.game.gameId"), JsonPath.read(body, "$.data.playerId"));
+
+        trend().andExpect(jsonPath("$.data.buckets", hasSize(4)))
+                .andExpect(jsonPath("$.data.buckets[0].hour").value(14))
+                .andExpect(jsonPath("$.data.buckets[0].startAt").value("2026-11-13T05:00:00.000Z"))
+                .andExpect(jsonPath("$.data.buckets[0].schools[0].schoolId").value("seoultech"))
+                .andExpect(jsonPath("$.data.buckets[0].schools[0].rank").value(1))
+                .andExpect(jsonPath("$.data.buckets[0].schools[1].schoolId").value("khu"))
+                .andExpect(jsonPath("$.data.buckets[0].schools[1].totalReps").value(6))
+                // 15시는 판이 없어 14시 누적을 그대로 잇는다
+                .andExpect(jsonPath("$.data.buckets[1].hour").value(15))
+                .andExpect(jsonPath("$.data.buckets[1].schools[0].schoolId").value("seoultech"))
+                .andExpect(jsonPath("$.data.buckets[1].schools[0].hourReps").value(0))
+                // 16시에 khu가 1위로
+                .andExpect(jsonPath("$.data.buckets[2].hour").value(16))
+                .andExpect(jsonPath("$.data.buckets[2].schools[0].schoolId").value("khu"))
+                .andExpect(jsonPath("$.data.buckets[2].schools[0].totalReps").value(14))
+                .andExpect(jsonPath("$.data.buckets[2].schools[0].hourReps").value(8))
+                .andExpect(jsonPath("$.data.buckets[2].schools[1].rank").value(2))
+                // 17시: 진행 중인 kw 판은 아직 없다
+                .andExpect(jsonPath("$.data.buckets[3].hour").value(17))
+                .andExpect(jsonPath("$.data.buckets[3].schools", hasSize(2)));
+
+        // 마지막 구간 순서는 standings와 같다
+        standings().andExpect(jsonPath("$.data.schools[0].schoolId").value("khu"))
+                .andExpect(jsonPath("$.data.schools[1].schoolId").value("seoultech"));
+    }
+
+    @Test
+    @DisplayName("추이: 누적이 같으면 schoolId 순으로 순위가 겹치지 않는다")
+    void trendTieBreak() throws Exception {
+        playGame(new String[]{"seoultech", "khu"}, new int[]{7, 7});
+        trend().andExpect(jsonPath("$.data.buckets[0].schools[0].schoolId").value("khu"))
+                .andExpect(jsonPath("$.data.buckets[0].schools[0].rank").value(1))
+                .andExpect(jsonPath("$.data.buckets[0].schools[1].rank").value(2));
+    }
+
+    /**
+     * 학교와 횟수를 받아 판 하나를 시작하고 모두 결과를 내 끝낸다.
+     */
+    private void playGame(String[] schoolIds, int[] reps) throws Exception {
+        String gameId = null;
+        List<String> playerIds = new ArrayList<>();
+        for (int i = 0; i < schoolIds.length; i++) {
+            String body = join(schoolIds[i] + i, schoolIds[i]).andReturn().getResponse().getContentAsString();
+            gameId = JsonPath.read(body, "$.data.game.gameId");
+            playerIds.add(JsonPath.read(body, "$.data.playerId"));
+        }
+        start(gameId, playerIds.get(0));
+        clock.advance(Duration.ofSeconds(26));
+        for (int i = 0; i < schoolIds.length; i++) {
+            result(gameId, playerIds.get(i), String.valueOf(reps[i]));
+        }
+    }
+
+    private ResultActions trend() throws Exception {
+        return mockMvc.perform(get("/api/univ-contest/trend"));
     }
 
     /**

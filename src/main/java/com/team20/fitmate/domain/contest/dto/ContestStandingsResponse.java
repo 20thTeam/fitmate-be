@@ -13,6 +13,7 @@ import java.util.List;
  * @param schools    학교별 합계. totalReps 큰 순
  * @param topPlayers 한 판 기록 상위 5개. reps 큰 순
  * @param gameCount  측정된 기록이 하나라도 있는 끝난 판 수
+ * @param players    참가자별 최고 기록 전체 (이슈 #43, 태블릿 참가자 상세 표). 같은 닉네임·학교는 한 사람으로 본다
  * @param serverNow  응답을 만든 서버 시각. 판 응답과 같이 모든 챌린지 응답에 넣는다
  */
 public record ContestStandingsResponse(
@@ -26,6 +27,9 @@ public record ContestStandingsResponse(
         @Schema(description = "측정된 기록이 하나라도 있는 끝난 판 수", example = "5")
         int gameCount,
 
+        @Schema(description = "참가자별 최고 기록 전체 (bestReps 큰 순). 같은 닉네임·학교는 한 사람으로 묶는다")
+        List<Player> players,
+
         @Schema(description = "응답을 만든 서버 시각(ISO 8601)", example = "2026-11-13T05:00:00.000Z")
         String serverNow
 ) {
@@ -34,8 +38,8 @@ public record ContestStandingsResponse(
      * 집계 결과와 현재 시각으로 응답을 만든다.
      */
     public static ContestStandingsResponse of(List<School> schools, List<TopPlayer> topPlayers, int gameCount,
-                                              Instant now) {
-        return new ContestStandingsResponse(schools, topPlayers, gameCount, ContestTimeFormat.format(now));
+                                              List<Player> players, Instant now) {
+        return new ContestStandingsResponse(schools, topPlayers, gameCount, players, ContestTimeFormat.format(now));
     }
 
     /**
@@ -73,6 +77,29 @@ public record ContestStandingsResponse(
 
             @Schema(description = "한 판 횟수", example = "21")
             int reps
+    ) {
+    }
+
+    /**
+     * 참가자 한 명의 최고 기록.
+     *
+     * @param nickname   닉네임
+     * @param schoolId   학교 식별값
+     * @param bestReps   한 판 최고 횟수
+     * @param entryCount 측정된 기록 수(참여한 판 수)
+     */
+    public record Player(
+            @Schema(description = "닉네임", example = "참가자1")
+            String nickname,
+
+            @Schema(description = "학교 식별값", example = "seoultech")
+            String schoolId,
+
+            @Schema(description = "한 판 최고 횟수", example = "21")
+            int bestReps,
+
+            @Schema(description = "측정된 기록 수", example = "2")
+            int entryCount
     ) {
     }
 }

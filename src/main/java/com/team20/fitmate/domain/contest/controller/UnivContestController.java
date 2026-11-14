@@ -6,6 +6,7 @@ import com.team20.fitmate.domain.contest.dto.ContestJoinResponse;
 import com.team20.fitmate.domain.contest.dto.ContestPlayerRequest;
 import com.team20.fitmate.domain.contest.dto.ContestResultRequest;
 import com.team20.fitmate.domain.contest.dto.ContestStandingsResponse;
+import com.team20.fitmate.domain.contest.dto.ContestTrendResponse;
 import com.team20.fitmate.domain.contest.service.ContestService;
 import com.team20.fitmate.global.rsdata.RsData;
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,6 +50,22 @@ public class UnivContestController {
     @GetMapping("/standings")
     public RsData<ContestStandingsResponse> getStandings() {
         return RsData.ok("챌린지 현황을 조회했습니다.", contestService.getStandings());
+    }
+
+    /**
+     * 학교별 누적 기록·순위의 1시간 단위 추이를 조회한다 (이슈 #43).
+     */
+    @Operation(summary = "추이 조회",
+            description = "standings와 같은 기준(끝난 판, 측정된 기록)으로 한국 시간 1시간 구간마다 학교별 누적 횟수·순위를 돌려준다. "
+                    + "판은 startAt이 속한 시간에 넣고, 첫 판의 시간부터 지금 시간까지 빈 시간 없이 만든다(판이 없던 시간은 앞 누적을 잇는다). "
+                    + "최근 24개 구간만 돌려주고 더 오래된 기록은 첫 구간 누적에 포함한다. "
+                    + "rank는 누적 큰 순, 같으면 schoolId 순이라 겹치지 않는다. 기록이 없으면 buckets는 빈 목록이다.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "200-1 추이 조회")
+    })
+    @GetMapping("/trend")
+    public RsData<ContestTrendResponse> getTrend() {
+        return RsData.ok("챌린지 추이를 조회했습니다.", contestService.getTrend());
     }
 
     /**
