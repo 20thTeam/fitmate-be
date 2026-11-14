@@ -2,6 +2,7 @@ package com.team20.fitmate.domain.contest.repository;
 
 import com.team20.fitmate.domain.contest.entity.ContestGame;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
@@ -22,4 +23,18 @@ public interface ContestGameRepository extends JpaRepository<ContestGame, Long> 
      */
     @Query("select distinct g from ContestGame g left join fetch g.players where g.startAt is not null")
     List<ContestGame> findStartedGamesWithPlayers();
+
+    /**
+     * 판 참가자·결과를 모두 지운다(운영 초기화, 이슈 #41). 판보다 먼저 지워야 외래 키에 걸리지 않는다.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("delete from ContestPlayer")
+    int deleteAllPlayers();
+
+    /**
+     * 판을 모두 지운다(운영 초기화, 이슈 #41). 진행 중인 판도 지운다.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("delete from ContestGame")
+    int deleteAllGames();
 }

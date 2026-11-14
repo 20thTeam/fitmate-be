@@ -1,5 +1,7 @@
 package com.team20.fitmate.domain.admin.service;
 
+import com.team20.fitmate.domain.contest.dto.ContestResetResponse;
+import com.team20.fitmate.domain.contest.service.ContestService;
 import com.team20.fitmate.domain.admin.dto.AdminParticipantResponse;
 import com.team20.fitmate.domain.admin.dto.AdminResetResponse;
 import com.team20.fitmate.domain.admin.dto.AdminRoomParticipantResponse;
@@ -33,6 +35,7 @@ public class AdminService {
     private final DemoDataResetter demoDataResetter;
     private final RoomPresenceReader roomPresenceReader;
     private final XpCalculator xpCalculator;
+    private final ContestService contestService;
 
     /**
      * 운동방별로 REST 입장한 참가자와 지금 웹소켓 연결 여부를 조회한다.
@@ -100,6 +103,18 @@ public class AdminService {
     public AdminResetResponse reset() {
         AdminResetResponse result = demoDataResetter.reset();
         roomPresenceReader.disconnectAll();
+        return result;
+    }
+
+    /**
+     * 학교 대항 스쿼트 챌린지 기록을 모두 지운다(이슈 #41). 진행 중인 판도 지운다.
+     * <p>
+     * 삭제가 커밋된 뒤 챌린지 판 웹소켓 연결만 닫는다. 삭제가 실패하면 연결은 그대로 둔다.
+     * 친구 운동방·공개 파티 데이터와 연결은 건드리지 않는다. 이 메서드에는 트랜잭션을 걸지 않는다.
+     */
+    public ContestResetResponse resetContest() {
+        ContestResetResponse result = contestService.resetAll();
+        roomPresenceReader.closeAllContestGames();
         return result;
     }
 }
