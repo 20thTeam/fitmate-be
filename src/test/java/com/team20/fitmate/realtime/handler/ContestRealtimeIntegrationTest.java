@@ -1,5 +1,6 @@
 package com.team20.fitmate.realtime.handler;
 
+import com.team20.fitmate.domain.admin.service.AdminService;
 import com.team20.fitmate.domain.contest.ContestTestClock;
 import com.team20.fitmate.domain.contest.dto.ContestJoinRequest;
 import com.team20.fitmate.domain.contest.dto.ContestJoinResponse;
@@ -57,6 +58,9 @@ class ContestRealtimeIntegrationTest {
 
     @Autowired
     private ContestGameRepository gameRepository;
+
+    @Autowired
+    private AdminService adminService;
 
     @Autowired
     private RoomSessionRegistry registry;
@@ -205,6 +209,35 @@ class ContestRealtimeIntegrationTest {
         assertThat(finished.path("payload").path("code").asString()).isEqualTo("CONTEST_GAME_FINISHED");
         assertThat(finished.path("payload").path("closed").asBoolean()).isTrue();
         late.awaitClosed();
+    }
+
+    @Test
+    @DisplayName("챌린지 기록 초기화(이슈 #41)하면 진행 중인 판 연결이 1000(CONTEST_GAME_FINISHED)으로 닫히고, 다시 들어오면 CONTEST_GAME_NOT_FOUND")
+    void resetClosesContestConnections() throws Exception {
+        ContestJoinResponse minjun = join("민준", "seoultech");
+        ContestJoinResponse jiho = join("지호", "khu");
+        Long gameId = Long.valueOf(minjun.game().gameId());
+        contestService.start(gameId, Long.valueOf(minjun.playerId()));
+
+        TestClient a = connect();
+        a.send(joinContest(minjun.game().gameId(), minjun.playerId()));
+        a.nextOfType("ROOM_SNAPSHOT");
+        TestClient b = connect();
+        b.send(joinContest(minjun.game().gameId(), jiho.playerId()));
+        b.nextOfType("ROOM_SNAPSHOT");
+
+        assertThat(adminService.resetContest().deletedGames()).isEqualTo(1);
+
+        a.awaitClosed();
+        b.awaitClosed();
+        assertThat(a.closeStatus.getCode()).isEqualTo(CloseStatus.NORMAL.getCode());
+        assertThat(a.closeStatus.getReason()).isEqualTo("CONTEST_GAME_FINISHED");
+        assertThat(registry.activeContestGameIds()).isEmpty();
+
+        TestClient again = connect();
+        again.send(joinContest(minjun.game().gameId(), minjun.playerId()));
+        assertThat(again.next().path("payload").path("code").asString()).isEqualTo("CONTEST_GAME_NOT_FOUND");
+        again.awaitClosed();
     }
 
     private ContestJoinResponse join(String nickname, String schoolId) {

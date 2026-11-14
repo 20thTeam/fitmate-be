@@ -36,6 +36,10 @@ class AdminDisabledTest {
         mockMvc.perform(get("/api/admin/rooms").header(AdminKeyInterceptor.ADMIN_KEY_HEADER, "anything"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.resultCode").value("403-1"));
+        // 챌린지 기록 초기화(이슈 #41)도 같은 운영 키 확인을 탄다
+        mockMvc.perform(post("/api/admin/univ-contest/reset").header(AdminKeyInterceptor.ADMIN_KEY_HEADER, "anything"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.resultCode").value("403-1"));
 
         mockMvc.perform(get("/api/rooms"))
                 .andExpect(status().isOk());

@@ -3,6 +3,7 @@ package com.team20.fitmate.domain.contest.service;
 import com.team20.fitmate.domain.contest.dto.ContestGameResponse;
 import com.team20.fitmate.domain.contest.dto.ContestJoinRequest;
 import com.team20.fitmate.domain.contest.dto.ContestJoinResponse;
+import com.team20.fitmate.domain.contest.dto.ContestResetResponse;
 import com.team20.fitmate.domain.contest.dto.ContestSeat;
 import com.team20.fitmate.domain.contest.dto.ContestStandingsResponse;
 import com.team20.fitmate.domain.contest.entity.ContestGame;
@@ -215,6 +216,20 @@ public class ContestService {
             }
         }
         return closed;
+    }
+
+    /**
+     * 판·참가자·결과를 모두 지운다(운영 초기화, 이슈 #41). 진행 중인 판도 지운다.
+     * <p>
+     * join·start·result·leave와 같은 잠금 안에서 지워, 지우는 중에 들어온 요청이 반쯤 지워진 판을 보지 않게 한다.
+     * 실시간 연결 정리는 호출한 쪽이 커밋 뒤에 한다.
+     */
+    public ContestResetResponse resetAll() {
+        return inWriteTransaction(() -> {
+            int deletedPlayers = gameRepository.deleteAllPlayers();
+            int deletedGames = gameRepository.deleteAllGames();
+            return new ContestResetResponse(deletedGames, deletedPlayers);
+        });
     }
 
     /**

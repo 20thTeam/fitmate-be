@@ -38,4 +38,12 @@ public class RegistryRoomPresenceReader implements RoomPresenceReader {
     public void disconnectAll() {
         registry.clear();
     }
+
+    /**
+     * 들어와 있는 챌린지 판을 모두 닫는다. 닫힘 코드는 판 종료와 같은 1000 CONTEST_GAME_FINISHED라 프론트가 다시 연결하지 않는다.
+     */
+    @Override
+    public void closeAllContestGames() {
+        registry.activeContestGameIds().forEach(registry::closeContestGame);
+    }
 }
